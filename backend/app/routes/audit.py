@@ -33,11 +33,17 @@ async def run_audit(body: AuditRequest) -> AuditResponse:
                 )
             )
 
+    completed_results = [
+        res for res in results
+        if not (len(res.recommendations) == 1 and "not yet implemented" in res.recommendations[0])
+    ]
+    overall_score = sum(res.score for res in completed_results) / len(completed_results) if completed_results else 0.0
+
     return AuditResponse(
         url=str(body.url),
         timestamp=datetime.now(timezone.utc).isoformat(),
         results=results,
-        overall_score=0.0,
+        overall_score=overall_score,
     )
 
 @router.post("/audit/performance", response_model=AuditResult, tags=["Audit"])

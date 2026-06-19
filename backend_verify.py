@@ -306,8 +306,8 @@ print("=" * 60)
 print("  BACKEND VERIFICATION SUMMARY")
 print("=" * 60)
 for key, val in results.items():
-    icon = "✅" if val == PASS else ("⚠️" if val == PARTIAL else "❌")
-    print(f"  {icon}  {key:<40} {val}")
+    icon = "[PASS]" if val == PASS else ("[WARN]" if val == PARTIAL else "[FAIL]")
+    print(f"  {icon:<8}  {key:<40} {val}")
 
 passed = sum(1 for v in results.values() if v == PASS)
 partial = sum(1 for v in results.values() if v == PARTIAL)

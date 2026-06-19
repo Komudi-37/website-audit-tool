@@ -11,6 +11,16 @@ interface SEOMetrics {
   h1_count?: number;
   total_images?: number;
   images_without_alt?: number;
+  canonical_url?: string | null;
+  robots_txt_exists?: boolean;
+  robots_txt_url?: string;
+  sitemap_exists?: boolean;
+  sitemap_url?: string;
+  indexable?: boolean;
+  noindex_reasons?: string[];
+  total_internal_links_found?: number;
+  links_checked?: number;
+  broken_links_count?: number;
 }
 
 const getScoreColor = (score: number) => {
@@ -59,7 +69,7 @@ const SEOCard: React.FC<Props> = ({ result }) => {
         <div className="metric-box">
           <span className="metric-label">Title Tag</span>
           <span className="metric-value" title={metrics.title}>
-            {metrics.title ? (metrics.title.length > 30 ? metrics.title.substring(0, 30) + "..." : metrics.title) : "—"}
+            {metrics.title ? (metrics.title.length > 20 ? metrics.title.substring(0, 20) + "..." : metrics.title) : "—"}
           </span>
         </div>
         <div className="metric-box">
@@ -74,6 +84,36 @@ const SEOCard: React.FC<Props> = ({ result }) => {
           <span className="metric-label">Images without Alt</span>
           <span className="metric-value">
             {metrics.images_without_alt ?? 0} / {metrics.total_images ?? 0}
+          </span>
+        </div>
+        <div className="metric-box">
+          <span className="metric-label">Indexable</span>
+          <span className="metric-value" style={{ color: metrics.indexable === false ? "var(--red)" : "var(--green)" }}>
+            {metrics.indexable === false ? "No 🛑" : "Yes ✅"}
+          </span>
+        </div>
+        <div className="metric-box">
+          <span className="metric-label">Canonical URL</span>
+          <span className="metric-value" title={metrics.canonical_url || "Missing"}>
+            {metrics.canonical_url ? (metrics.canonical_url.length > 20 ? metrics.canonical_url.substring(0, 20) + "..." : metrics.canonical_url) : "Missing"}
+          </span>
+        </div>
+        <div className="metric-box">
+          <span className="metric-label">robots.txt</span>
+          <span className="metric-value" style={{ color: metrics.robots_txt_exists ? "var(--green)" : "var(--amber)" }}>
+            {metrics.robots_txt_exists ? "Found ✅" : "Missing ⚠️"}
+          </span>
+        </div>
+        <div className="metric-box">
+          <span className="metric-label">sitemap.xml</span>
+          <span className="metric-value" style={{ color: metrics.sitemap_exists ? "var(--green)" : "var(--amber)" }}>
+            {metrics.sitemap_exists ? "Found ✅" : "Missing ⚠️"}
+          </span>
+        </div>
+        <div className="metric-box">
+          <span className="metric-label">Broken Links</span>
+          <span className="metric-value" style={{ color: (metrics.broken_links_count ?? 0) > 0 ? "var(--red)" : "var(--green)" }}>
+            {metrics.broken_links_count ?? 0} / {metrics.links_checked ?? 0}
           </span>
         </div>
       </div>

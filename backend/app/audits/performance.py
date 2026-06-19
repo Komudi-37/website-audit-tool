@@ -25,11 +25,20 @@ def run_lighthouse_audit(url: str) -> AuditResult:
             "--quiet"
         ]
         
-        result = subprocess.run(command, capture_output=True, text=True)
-        if result.returncode != 0:
-            logger.error(f"Lighthouse failed with exit code {result.returncode}")
-            logger.error(f"Stderr: {result.stderr}")
-            return _generate_error_result(url, f"Lighthouse execution failed: {result.stderr}")
+        try:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+                stdin=subprocess.DEVNULL
+            )
+            if result.returncode != 0:
+                logger.error(f"Lighthouse failed with exit code {result.returncode}")
+                return _generate_error_result(url, f"Lighthouse execution failed with exit code {result.returncode}")
+        except subprocess.TimeoutExpired:
+            logger.error("Lighthouse execution timed out after 30 seconds")
+            return _generate_error_result(url, "Lighthouse execution timed out after 30 seconds")
 
         with open(temp_path, "r", encoding="utf-8") as f:
             data = json.load(f)
