@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter
 from app.schemas.audit import AuditRequest, AuditResponse, AuditResult
+from app.audits.performance import run_lighthouse_audit
 
 router = APIRouter()
 
@@ -11,21 +12,24 @@ _ALL_CATEGORIES = ["performance", "seo", "accessibility", "security", "functiona
 @router.post("/audit", response_model=AuditResponse, tags=["Audit"])
 async def run_audit(body: AuditRequest) -> AuditResponse:
     """
-    Phase 1 stub — returns a schema-valid AuditResponse.
-    Real audit engines will be wired in Phase 2+.
+    Primary workflow: runs the selected audits and returns the combined response.
     """
     categories = body.categories if body.categories else _ALL_CATEGORIES
 
-    results = [
-        AuditResult(
-            audit_type=cat,
-            score=0.0,
-            metrics={},
-            findings=[],
-            recommendations=[f"{cat.capitalize()} audit engine not yet implemented."],
-        )
-        for cat in categories
-    ]
+    results = []
+    for cat in categories:
+        if cat == "performance":
+            results.append(run_lighthouse_audit(str(body.url)))
+        else:
+            results.append(
+                AuditResult(
+                    audit_type=cat,
+                    score=0.0,
+                    metrics={},
+                    findings=[],
+                    recommendations=[f"{cat.capitalize()} audit engine not yet implemented."],
+                )
+            )
 
     return AuditResponse(
         url=str(body.url),
@@ -33,3 +37,10 @@ async def run_audit(body: AuditRequest) -> AuditResponse:
         results=results,
         overall_score=0.0,
     )
+
+@router.post("/audit/performance", response_model=AuditResult, tags=["Audit"])
+async def run_audit_performance(body: AuditRequest) -> AuditResult:
+    """
+    Standalone testing endpoint for the Performance audit engine.
+    """
+    return run_lighthouse_audit(str(body.url))

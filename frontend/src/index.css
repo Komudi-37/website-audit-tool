@@ -442,3 +442,29 @@ body {
   .audit-card { padding: 24px 20px; }
   .categories-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* -- Performance Card ------------------------------------------------------- */
+.performance-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 28px; box-shadow: var(--shadow-card); animation: fadeUp 0.4s ease; }
+.perf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+.perf-title-group { display: flex; align-items: center; gap: 12px; }
+.perf-icon { font-size: 24px; }
+.perf-title-group h3 { font-size: 1.25rem; font-weight: 700; color: var(--text-primary); }
+.perf-score-circle { width: 56px; height: 56px; border-radius: 50%; border: 4px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: 800; background: var(--bg-surface); }
+.perf-metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+.metric-box { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.metric-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+.metric-value { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; }
+.perf-findings, .perf-recommendations { margin-top: 24px; }
+.perf-findings h4, .perf-recommendations h4 { font-size: 0.9rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
+.finding-list, .rec-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.finding-item { display: flex; align-items: flex-start; gap: 12px; background: var(--bg-surface); padding: 14px 16px; border-radius: var(--radius-md); border-left: 4px solid var(--border); }
+.finding-item.severity-critical { border-left-color: var(--red); background: var(--red-dim); }
+.finding-item.severity-warning { border-left-color: var(--amber); background: var(--amber-dim); }
+.finding-item.severity-info { border-left-color: var(--blue); background: var(--blue-dim); }
+.finding-item.severity-pass { border-left-color: var(--green); background: var(--green-dim); }
+.finding-icon { font-size: 16px; margin-top: 2px; }
+.finding-title { display: block; font-size: 0.9rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.finding-desc { display: block; font-size: 0.85rem; color: var(--text-muted); }
+.rec-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 0.9rem; color: var(--text-primary); padding: 10px 14px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border); }
+.rec-bullet { font-size: 16px; }
+

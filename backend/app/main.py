@@ -20,8 +20,8 @@ def create_app() -> FastAPI:
     """Application factory."""
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        logger.info("🚀  %s v%s started", settings.APP_NAME, settings.APP_VERSION)
-        logger.info("📖  Docs available at http://localhost:8000/docs")
+        logger.info("%s v%s started", settings.APP_NAME, settings.APP_VERSION)
+        logger.info("Docs available at http://localhost:8000/docs")
         yield
 
     app = FastAPI(
