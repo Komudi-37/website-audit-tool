@@ -1,6 +1,7 @@
 import React from "react";
 import type { AuditResponse, AuditResult } from "../types";
 import PerformanceCard from "./PerformanceCard";
+import SEOCard from "./SEOCard";
 
 interface Props {
   data: unknown;
@@ -12,10 +13,11 @@ const ResultsPanel: React.FC<Props> = ({ data, url }) => {
   const results = Array.isArray(response.results) ? response.results : [];
   
   const perfResult = results.find(r => r.audit_type === "performance") as AuditResult | undefined;
+  const seoResult = results.find(r => r.audit_type === "seo") as AuditResult | undefined;
   
   const rawData = { ...response };
-  if (perfResult && Array.isArray(rawData.results)) {
-    rawData.results = rawData.results.filter(r => r.audit_type !== "performance");
+  if (Array.isArray(rawData.results)) {
+    rawData.results = rawData.results.filter(r => r.audit_type !== "performance" && r.audit_type !== "seo");
   }
 
   const formatted = JSON.stringify(rawData, null, 2);
@@ -29,6 +31,10 @@ const ResultsPanel: React.FC<Props> = ({ data, url }) => {
 
       {perfResult && (
         <PerformanceCard result={perfResult} />
+      )}
+
+      {seoResult && (
+        <SEOCard result={seoResult} />
       )}
 
       {rawData.results && rawData.results.length > 0 && (

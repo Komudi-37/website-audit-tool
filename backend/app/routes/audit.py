@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter
 from app.schemas.audit import AuditRequest, AuditResponse, AuditResult
 from app.audits.performance import run_lighthouse_audit
-
+from app.audits.seo import run_seo_audit
 router = APIRouter()
 
 _ALL_CATEGORIES = ["performance", "seo", "accessibility", "security", "functionality"]
@@ -20,6 +20,8 @@ async def run_audit(body: AuditRequest) -> AuditResponse:
     for cat in categories:
         if cat == "performance":
             results.append(run_lighthouse_audit(str(body.url)))
+        elif cat == "seo":
+            results.append(run_seo_audit(str(body.url)))
         else:
             results.append(
                 AuditResult(
@@ -44,3 +46,10 @@ async def run_audit_performance(body: AuditRequest) -> AuditResult:
     Standalone testing endpoint for the Performance audit engine.
     """
     return run_lighthouse_audit(str(body.url))
+
+@router.post("/audit/seo", response_model=AuditResult, tags=["Audit"])
+async def run_audit_seo(body: AuditRequest) -> AuditResult:
+    """
+    Standalone testing endpoint for the SEO audit engine.
+    """
+    return run_seo_audit(str(body.url))
