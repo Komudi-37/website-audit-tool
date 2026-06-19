@@ -17,7 +17,7 @@ def run_lighthouse_audit(url: str) -> AuditResult:
 
     try:
         command = [
-            "lighthouse",
+            "lighthouse.cmd" if os.name == "nt" else "lighthouse",
             url,
             "--chrome-flags=--headless",
             "--output=json",
