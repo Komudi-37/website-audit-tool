@@ -80,7 +80,7 @@ Interactive docs: http://localhost:8000/docs
 - [x] Phase 1 — Project setup & health endpoint
 - [x] Phase 2 — Frontend ↔ Backend connection
 - [x] Phase 3 — Performance audit (Lighthouse)
-- [ ] Phase 4 — SEO audit (BS4 + requests)
+- [x] Phase 4 — SEO audit (BS4 + requests)
 - [ ] Phase 5 — Accessibility audit (Playwright + axe-core)
 - [ ] Phase 6 — Security audit (headers + SSL)
 - [ ] Phase 7 — Functionality audit (Playwright)
