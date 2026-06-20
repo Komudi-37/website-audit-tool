@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from app.schemas.audit import AuditRequest, AuditResponse, AuditResult
 from app.audits.performance import run_lighthouse_audit
 from app.audits.seo import run_seo_audit
+from app.audits.accessibility import run_accessibility_audit
 router = APIRouter()
 
 _ALL_CATEGORIES = ["performance", "seo", "accessibility", "security", "functionality"]
@@ -22,6 +23,8 @@ async def run_audit(body: AuditRequest) -> AuditResponse:
             results.append(run_lighthouse_audit(str(body.url)))
         elif cat == "seo":
             results.append(run_seo_audit(str(body.url)))
+        elif cat == "accessibility":
+            results.append(await run_accessibility_audit(str(body.url)))
         else:
             results.append(
                 AuditResult(
@@ -59,3 +62,11 @@ async def run_audit_seo(body: AuditRequest) -> AuditResult:
     Standalone testing endpoint for the SEO audit engine.
     """
     return run_seo_audit(str(body.url))
+
+@router.post("/audit/accessibility", response_model=AuditResult, tags=["Audit"])
+async def run_audit_accessibility(body: AuditRequest) -> AuditResult:
+    """
+    Standalone testing endpoint for the Accessibility audit engine.
+    """
+    return await run_accessibility_audit(str(body.url))
+

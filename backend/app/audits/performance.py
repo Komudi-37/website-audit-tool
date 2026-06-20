@@ -29,16 +29,32 @@ def run_lighthouse_audit(url: str) -> AuditResult:
             result = subprocess.run(
                 command,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=30,
+                stderr=subprocess.PIPE,
+                timeout=60,
                 stdin=subprocess.DEVNULL
             )
             if result.returncode != 0:
-                logger.error(f"Lighthouse failed with exit code {result.returncode}")
-                return _generate_error_result(url, f"Lighthouse execution failed with exit code {result.returncode}")
+                # On Windows, Lighthouse exits with code 1 due to an EPERM error
+                # when cleaning up its own temp directory after a successful audit run.
+                # We attempt to read the output file first — only fail if it is missing.
+                if not os.path.exists(temp_path):
+                    stderr_text = (result.stderr or b"").decode("utf-8", errors="replace")[:200]
+                    logger.error(f"Lighthouse exited {result.returncode} and produced no output. stderr: {stderr_text}")
+                    return _generate_error_result(url, f"Lighthouse exited with code {result.returncode}. {stderr_text}")
+                else:
+                    stderr_text = (result.stderr or b"").decode("utf-8", errors="replace")
+                    if "EPERM" in stderr_text or "Permission denied" in stderr_text:
+                        logger.warning(
+                            f"Lighthouse exited {result.returncode} (Windows EPERM temp-cleanup — non-fatal). "
+                            "Proceeding to parse output file."
+                        )
+                    else:
+                        logger.warning(
+                            f"Lighthouse exited {result.returncode} but output file exists — attempting parse."
+                        )
         except subprocess.TimeoutExpired:
-            logger.error("Lighthouse execution timed out after 30 seconds")
-            return _generate_error_result(url, "Lighthouse execution timed out after 30 seconds")
+            logger.error("Lighthouse execution timed out after 60 seconds")
+            return _generate_error_result(url, "Lighthouse execution timed out after 60 seconds")
 
         with open(temp_path, "r", encoding="utf-8") as f:
             data = json.load(f)

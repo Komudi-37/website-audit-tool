@@ -24,6 +24,8 @@ dist/
 *.tmp
 *.cache
 lighthouse-reports/
+screenshots/
+backend/screenshots/
 
 # ── IDE ───────────────────────────────────────────────────────────────────────
 .vscode/

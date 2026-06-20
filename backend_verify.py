@@ -279,9 +279,9 @@ except Exception as e:
 # ─────────────────────────────────────────────────────────────
 # 9. Unimplemented categories stub
 # ─────────────────────────────────────────────────────────────
-print("\n[9] Unimplemented categories stub (accessibility, security, functionality)")
+print("\n[9] Unimplemented categories stub (security, functionality)")
 try:
-    r = client.post("/audit", json={"url": "https://example.com", "categories": ["accessibility", "security", "functionality"]})
+    r = client.post("/audit", json={"url": "https://example.com", "categories": ["security", "functionality"]})
     print("  HTTP Status:", r.status_code)
     if r.status_code == 200:
         d = r.json()
@@ -297,6 +297,75 @@ try:
 except Exception as e:
     print("  EXCEPTION:", e)
     results["unimplemented_stub"] = FAIL
+
+# ─────────────────────────────────────────────────────────────
+# 10. POST /audit/accessibility
+# ─────────────────────────────────────────────────────────────
+print("\n[10] POST /audit/accessibility (https://example.com)")
+try:
+    r = client.post("/audit/accessibility", json={"url": "https://example.com"})
+    print("  HTTP Status:", r.status_code)
+    if r.status_code == 200:
+        d = r.json()
+        print("  audit_type :", d.get("audit_type"))
+        print("  score      :", d.get("score"))
+        metrics = d.get("metrics", {})
+        print("  metrics    :", json.dumps(metrics, indent=6))
+        findings = d.get("findings", [])
+        print("  findings   :", len(findings), "total")
+        
+        has_type = d.get("audit_type") == "accessibility"
+        has_score = isinstance(d.get("score"), (int, float)) and d.get("score") > 0
+        has_metrics = "total_violations" in metrics
+        has_findings = len(findings) > 0
+        
+        if has_type and has_score and has_metrics and has_findings:
+            results["accessibility_endpoint"] = PASS
+            results["accessibility_metric_extraction"] = PASS
+            results["accessibility_findings"] = PASS
+        else:
+            results["accessibility_endpoint"] = FAIL
+            results["accessibility_metric_extraction"] = FAIL
+            results["accessibility_findings"] = FAIL
+    else:
+        print("  ERROR:", r.text[:200])
+        results["accessibility_endpoint"] = FAIL
+        results["accessibility_metric_extraction"] = FAIL
+        results["accessibility_findings"] = FAIL
+except Exception as e:
+    print("  EXCEPTION:", e)
+    results["accessibility_endpoint"] = FAIL
+    results["accessibility_metric_extraction"] = FAIL
+    results["accessibility_findings"] = FAIL
+
+# ─────────────────────────────────────────────────────────────
+# 11. POST /audit (performance + seo + accessibility)
+# ─────────────────────────────────────────────────────────────
+print("\n[11] POST /audit (categories: [performance, seo, accessibility])")
+try:
+    r = client.post("/audit", json={"url": "https://example.com", "categories": ["performance", "seo", "accessibility"]})
+    print("  HTTP Status:", r.status_code)
+    if r.status_code == 200:
+        d = r.json()
+        results_list = d.get("results", [])
+        print("  results    :", len(results_list), "total")
+        for res in results_list:
+            print("    audit_type:", res.get("audit_type"), "score:", res.get("score"))
+        all_three = (any(r.get("audit_type") == "performance" for r in results_list) and
+                     any(r.get("audit_type") == "seo" for r in results_list) and
+                     any(r.get("audit_type") == "accessibility" for r in results_list))
+        
+        scores = [r.get("score") for r in results_list]
+        expected_overall = sum(scores) / len(scores) if scores else 0.0
+        overall_match = abs(d.get("overall_score", 0.0) - expected_overall) < 0.01
+        
+        results["full_audit_three"] = PASS if (all_three and overall_match) else FAIL
+    else:
+        print("  ERROR:", r.text[:200])
+        results["full_audit_three"] = FAIL
+except Exception as e:
+    print("  EXCEPTION:", e)
+    results["full_audit_three"] = FAIL
 
 # ─────────────────────────────────────────────────────────────
 # SUMMARY
@@ -316,3 +385,4 @@ total = len(results)
 print()
 print(f"  TOTAL: {passed}/{total} PASS   {partial} PARTIAL   {failed} FAIL")
 print("=" * 60)
+
