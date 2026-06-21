@@ -5,6 +5,7 @@ from app.schemas.audit import AuditRequest, AuditResponse, AuditResult
 from app.audits.performance import run_lighthouse_audit
 from app.audits.seo import run_seo_audit
 from app.audits.accessibility import run_accessibility_audit
+from app.audits.security import run_security_audit
 router = APIRouter()
 
 _ALL_CATEGORIES = ["performance", "seo", "accessibility", "security", "functionality"]
@@ -25,6 +26,8 @@ async def run_audit(body: AuditRequest) -> AuditResponse:
             results.append(run_seo_audit(str(body.url)))
         elif cat == "accessibility":
             results.append(await run_accessibility_audit(str(body.url)))
+        elif cat == "security":
+            results.append(run_security_audit(str(body.url)))
         else:
             results.append(
                 AuditResult(
@@ -69,4 +72,11 @@ async def run_audit_accessibility(body: AuditRequest) -> AuditResult:
     Standalone testing endpoint for the Accessibility audit engine.
     """
     return await run_accessibility_audit(str(body.url))
+
+@router.post("/audit/security", response_model=AuditResult, tags=["Audit"])
+async def run_audit_security(body: AuditRequest) -> AuditResult:
+    """
+    Standalone testing endpoint for the Security audit engine.
+    """
+    return run_security_audit(str(body.url))
 
