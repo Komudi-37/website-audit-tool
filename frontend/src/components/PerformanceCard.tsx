@@ -16,6 +16,7 @@ const PerformanceCard: React.FC<Props> = ({ result }) => {
       score={result.score}
       findings={result.findings}
       recommendations={result.recommendations}
+      preserveFindingWhitespace
       metrics={
         <MetricsGrid>
           <MetricCard

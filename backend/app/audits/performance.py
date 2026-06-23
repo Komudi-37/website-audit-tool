@@ -4,72 +4,163 @@ import json
 import tempfile
 import logging
 import os
+import time
 from app.schemas.audit import AuditResult, Finding
 
 logger = logging.getLogger("audit_tool.performance")
 
+DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS = 90
+ERROR_DESCRIPTION_LIMIT = 800
+
+
+def _lighthouse_timeout_seconds() -> int:
+    raw = os.environ.get("LIGHTHOUSE_TIMEOUT_SECONDS", str(DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS))
+    try:
+        return max(30, int(raw))
+    except ValueError:
+        logger.warning("Invalid LIGHTHOUSE_TIMEOUT_SECONDS=%r — using default %s", raw, DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS)
+        return DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS
+
+
+def _classify_lighthouse_error(error_msg: str, *, timed_out: bool = False) -> str:
+    if timed_out:
+        return "Lighthouse Execution Timeout"
+    msg_lower = error_msg.lower()
+    if "timed out" in msg_lower or "timeout" in msg_lower:
+        return "Lighthouse Execution Timeout"
+    if "enoent" in msg_lower or "not found" in msg_lower:
+        return "Lighthouse Not Available"
+    if "failed to parse" in msg_lower or "json" in msg_lower:
+        return "Lighthouse Report Parse Error"
+    if "exited with code" in msg_lower:
+        return "Lighthouse Process Error"
+    return "Lighthouse Audit Failed"
+
+
 def run_lighthouse_audit(url: str) -> AuditResult:
     """Run Lighthouse performance audit against a given URL."""
-    logger.info(f"Starting Lighthouse performance audit for {url}")
-    
+    timeout_seconds = _lighthouse_timeout_seconds()
+    logger.info("Starting Lighthouse performance audit for %s (timeout=%ss)", url, timeout_seconds)
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_file:
         temp_path = temp_file.name
 
+    started_at = time.perf_counter()
+    command = [
+        "lighthouse.cmd" if os.name == "nt" else "lighthouse",
+        url,
+        "--chrome-flags=--headless",
+        "--output=json",
+        f"--output-path={temp_path}",
+        "--quiet",
+    ]
+    logger.info("Lighthouse command: %s", " ".join(command))
+
     try:
-        command = [
-            "lighthouse.cmd" if os.name == "nt" else "lighthouse",
-            url,
-            "--chrome-flags=--headless",
-            "--output=json",
-            f"--output-path={temp_path}",
-            "--quiet"
-        ]
-        
+        exit_code: int | None = None
+        stderr_text = ""
+
         try:
             result = subprocess.run(
                 command,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
-                timeout=60,
-                stdin=subprocess.DEVNULL
+                timeout=timeout_seconds,
+                stdin=subprocess.DEVNULL,
             )
-            if result.returncode != 0:
-                # On Windows, Lighthouse exits with code 1 due to an EPERM error
-                # when cleaning up its own temp directory after a successful audit run.
-                # We attempt to read the output file first — only fail if it is missing.
-                if not os.path.exists(temp_path):
-                    stderr_text = (result.stderr or b"").decode("utf-8", errors="replace")[:200]
-                    logger.error(f"Lighthouse exited {result.returncode} and produced no output. stderr: {stderr_text}")
-                    return _generate_error_result(url, f"Lighthouse exited with code {result.returncode}. {stderr_text}")
+            exit_code = result.returncode
+            stderr_text = (result.stderr or b"").decode("utf-8", errors="replace")
+            duration = time.perf_counter() - started_at
+            json_exists = os.path.exists(temp_path)
+            json_size = os.path.getsize(temp_path) if json_exists else 0
+
+            logger.info(
+                "Lighthouse finished in %.2fs — exit_code=%s, json_exists=%s, json_size=%s bytes",
+                duration,
+                exit_code,
+                json_exists,
+                json_size,
+            )
+            if stderr_text.strip():
+                logger.info("Lighthouse stderr (first 500 chars): %s", stderr_text[:500])
+
+            if exit_code != 0:
+                if not json_exists:
+                    detail = (
+                        f"Lighthouse exited with code {exit_code} and did not produce a JSON report "
+                        f"after {duration:.1f}s."
+                    )
+                    if stderr_text.strip():
+                        detail += f" stderr: {stderr_text.strip()[:400]}"
+                    logger.error(detail)
+                    return _generate_error_result(url, detail, title=_classify_lighthouse_error(detail))
+
+                if "EPERM" in stderr_text or "Permission denied" in stderr_text:
+                    logger.warning(
+                        "Lighthouse exited %s (Windows EPERM temp-cleanup — non-fatal). Proceeding to parse output file.",
+                        exit_code,
+                    )
                 else:
-                    stderr_text = (result.stderr or b"").decode("utf-8", errors="replace")
-                    if "EPERM" in stderr_text or "Permission denied" in stderr_text:
-                        logger.warning(
-                            f"Lighthouse exited {result.returncode} (Windows EPERM temp-cleanup — non-fatal). "
-                            "Proceeding to parse output file."
-                        )
-                    else:
-                        logger.warning(
-                            f"Lighthouse exited {result.returncode} but output file exists — attempting parse."
-                        )
-        except subprocess.TimeoutExpired:
-            logger.error("Lighthouse execution timed out after 60 seconds")
-            return _generate_error_result(url, "Lighthouse execution timed out after 60 seconds")
+                    logger.warning(
+                        "Lighthouse exited %s but output file exists — attempting parse.",
+                        exit_code,
+                    )
+
+        except subprocess.TimeoutExpired as exc:
+            duration = time.perf_counter() - started_at
+            json_exists = os.path.exists(temp_path)
+            json_size = os.path.getsize(temp_path) if json_exists else 0
+            partial_stderr = ""
+            if exc.stderr:
+                partial_stderr = exc.stderr.decode("utf-8", errors="replace")[:400]
+
+            detail = (
+                f"Lighthouse execution timed out after {timeout_seconds} seconds "
+                f"(elapsed {duration:.1f}s). "
+                f"JSON output file created: {json_exists}"
+            )
+            if json_exists:
+                detail += f" (size: {json_size} bytes — report may be incomplete)."
+            else:
+                detail += ". No JSON report was written."
+            if partial_stderr:
+                detail += f" stderr: {partial_stderr}"
+
+            logger.error(detail)
+            return _generate_error_result(
+                url,
+                detail,
+                title=_classify_lighthouse_error(detail, timed_out=True),
+            )
+
+        if not os.path.exists(temp_path):
+            duration = time.perf_counter() - started_at
+            detail = f"Lighthouse completed in {duration:.1f}s but no JSON output file was found at {temp_path}."
+            logger.error(detail)
+            return _generate_error_result(url, detail, title="Lighthouse Output Missing")
 
         with open(temp_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         return _parse_lighthouse_report(data)
 
-    except Exception as e:
-        logger.exception(f"Error running lighthouse for {url}")
-        return _generate_error_result(url, str(e))
+    except json.JSONDecodeError as exc:
+        duration = time.perf_counter() - started_at
+        detail = f"Failed to parse Lighthouse JSON after {duration:.1f}s: {exc}"
+        logger.exception(detail)
+        return _generate_error_result(url, detail, title="Lighthouse Report Parse Error")
+    except Exception as exc:
+        duration = time.perf_counter() - started_at
+        detail = f"Unexpected Lighthouse error after {duration:.1f}s: {exc}"
+        logger.exception(detail)
+        return _generate_error_result(url, detail, title=_classify_lighthouse_error(str(exc)))
     finally:
         if os.path.exists(temp_path):
             try:
                 os.remove(temp_path)
-            except Exception as e:
-                logger.warning(f"Failed to delete temp file {temp_path}: {e}")
+            except Exception as exc:
+                logger.warning("Failed to delete temp file %s: %s", temp_path, exc)
+
 
 def _parse_lighthouse_report(data: dict) -> AuditResult:
     try:
@@ -77,7 +168,7 @@ def _parse_lighthouse_report(data: dict) -> AuditResult:
         score = round((score_val or 0) * 100)
 
         audits = data.get("audits", {})
-        
+
         fcp_raw = audits.get("first-contentful-paint", {})
         lcp_raw = audits.get("largest-contentful-paint", {})
         cls_raw = audits.get("cumulative-layout-shift", {})
@@ -137,14 +228,19 @@ def _parse_lighthouse_report(data: dict) -> AuditResult:
             score=score,
             metrics=metrics,
             findings=findings,
-            recommendations=recommendations
+            recommendations=recommendations,
         )
 
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Failed to parse Lighthouse JSON report")
-        return _generate_error_result("", f"Failed to parse report: {e}")
+        return _generate_error_result("", f"Failed to parse report: {exc}", title="Lighthouse Report Parse Error")
 
-def _generate_error_result(url: str, error_msg: str) -> AuditResult:
+
+def _generate_error_result(url: str, error_msg: str, *, title: str = "Lighthouse Audit Failed") -> AuditResult:
+    trimmed = error_msg[:ERROR_DESCRIPTION_LIMIT]
+    if url:
+        trimmed = f"URL: {url}\n{trimmed}"
+
     return AuditResult(
         audit_type="performance",
         score=0,
@@ -152,11 +248,11 @@ def _generate_error_result(url: str, error_msg: str) -> AuditResult:
         findings=[
             Finding(
                 id="perf-error",
-                title="Lighthouse Audit Failed",
-                description=error_msg[:200],
+                title=title,
+                description=trimmed,
                 severity="critical",
-                category="performance"
+                category="performance",
             )
         ],
-        recommendations=["Ensure the URL is publicly accessible and Lighthouse is correctly installed."]
+        recommendations=["Ensure the URL is publicly accessible and Lighthouse is correctly installed."],
     )

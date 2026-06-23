@@ -62,6 +62,17 @@ export function MetricCard({
   );
 }
 
+export const AUDIT_ERROR_FINDING_IDS = new Set(["perf-error", "a11y-audit-failed"]);
+
+export function AuditErrorBanner({ finding }: { finding: Finding }) {
+  return (
+    <div className="audit-error-banner" role="alert">
+      <p className="audit-error-banner-title">{finding.title}</p>
+      <pre className="audit-error-banner-message">{finding.description}</pre>
+    </div>
+  );
+}
+
 export function MetricsGrid({ children }: { children: React.ReactNode }) {
   return <div className="audit-metrics-grid">{children}</div>;
 }
@@ -89,6 +100,10 @@ export function AuditCardLayout({
 }: AuditCardLayoutProps) {
   const tier = getScoreTier(score);
   const displayScore = Number.isInteger(score) ? score : Math.round(score * 10) / 10;
+  const errorFinding = findings.find((f) => AUDIT_ERROR_FINDING_IDS.has(f.id));
+  const operationalFindings = errorFinding
+    ? findings.filter((f) => !AUDIT_ERROR_FINDING_IDS.has(f.id))
+    : findings;
 
   return (
     <article className={`audit-card ${className}`.trim()}>
@@ -105,6 +120,8 @@ export function AuditCardLayout({
         </div>
       </header>
 
+      {errorFinding && <AuditErrorBanner finding={errorFinding} />}
+
       <section className="audit-section" aria-labelledby={`${categoryTag}-metrics`}>
         <h4 className="audit-section-title" id={`${categoryTag}-metrics`}>
           Metrics
@@ -112,14 +129,14 @@ export function AuditCardLayout({
         {metrics}
       </section>
 
-      {findings.length > 0 && (
+      {operationalFindings.length > 0 && (
         <section className="audit-section" aria-labelledby={`${categoryTag}-findings`}>
           <h4 className="audit-section-title" id={`${categoryTag}-findings`}>
             Findings
-            <span className="audit-section-count">{findings.length}</span>
+            <span className="audit-section-count">{operationalFindings.length}</span>
           </h4>
           <ul className="audit-findings-list">
-            {findings.map((f, i) => (
+            {operationalFindings.map((f, i) => (
               <li key={f.id || i} className="audit-finding-item">
                 <div className="audit-finding-header">
                   <SeverityBadge severity={f.severity} />
