@@ -24,7 +24,7 @@ const AuditForm: React.FC<Props> = ({
   };
 
   return (
-    <div className="audit-form-card">
+    <div className="audit-form-card" aria-busy={loading}>
       <section className="audit-primary" aria-labelledby="audit-primary-title">
         <div className="audit-primary-header">
           <h2 id="audit-primary-title" className="audit-primary-title">
@@ -58,14 +58,18 @@ const AuditForm: React.FC<Props> = ({
           </div>
           <button
             id="run-audit-btn"
+            type="button"
             className="btn-run"
             onClick={onSubmit}
             disabled={loading || !url.trim()}
+            aria-disabled={loading || !url.trim()}
+            aria-busy={loading}
           >
             {loading ? (
               <>
                 <span className="spinner" aria-hidden="true" />
-                Auditing…
+                <span>Auditing…</span>
+                <span className="visually-hidden">Audit in progress</span>
               </>
             ) : (
               <>Run Audit</>

@@ -5,7 +5,10 @@ import "./index.css";
 const App: React.FC = () => {
   return (
     <div className="app-wrapper">
-      {/* Header */}
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
+
       <header className="header">
         <div className="container">
           <div className="header-inner">
@@ -16,12 +19,11 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Hero */}
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <div className="container">
-          <section className="hero">
+          <section className="hero" aria-labelledby="hero-title">
             <p className="hero-eyebrow">Website Audit Platform</p>
-            <h1 className="hero-title">
+            <h1 id="hero-title" className="hero-title">
               Audit any website.
               <span className="hero-title-accent"> Get comprehensive reports.</span>
             </h1>
@@ -35,7 +37,6 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="footer">
         <div className="container">
           WebAudit Pro · Automated website audits · Performance · SEO · Accessibility · Security

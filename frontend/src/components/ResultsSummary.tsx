@@ -25,32 +25,32 @@ const ResultsSummary: React.FC<Props> = ({ overallScore, results }) => {
   );
 
   return (
-    <div className="results-summary" aria-label="Audit summary">
+    <dl className="results-summary">
       <div className="summary-stat">
-        <span className="summary-stat-label">Overall Score</span>
-        <span className={`summary-stat-value summary-stat-value--${tier}`}>
+        <dt className="summary-stat-label">Overall Score</dt>
+        <dd className={`summary-stat-value summary-stat-value--${tier}`}>
           {displayScore}
-        </span>
+        </dd>
       </div>
       <div className="summary-stat">
-        <span className="summary-stat-label">Audits Completed</span>
-        <span className="summary-stat-value">{results.length}</span>
+        <dt className="summary-stat-label">Audits Completed</dt>
+        <dd className="summary-stat-value">{results.length}</dd>
       </div>
       <div className="summary-stat">
-        <span className="summary-stat-label">Critical Findings</span>
-        <span
+        <dt className="summary-stat-label">Critical Findings</dt>
+        <dd
           className={`summary-stat-value${
             criticalCount > 0 ? " summary-stat-value--poor" : ""
           }`}
         >
           {criticalCount}
-        </span>
+        </dd>
       </div>
       <div className="summary-stat">
-        <span className="summary-stat-label">Recommendations</span>
-        <span className="summary-stat-value">{recommendationsCount}</span>
+        <dt className="summary-stat-label">Recommendations</dt>
+        <dd className="summary-stat-value">{recommendationsCount}</dd>
       </div>
-    </div>
+    </dl>
   );
 };
 
