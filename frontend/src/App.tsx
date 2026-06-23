@@ -9,9 +9,9 @@ const App: React.FC = () => {
       <header className="header">
         <div className="container">
           <div className="header-inner">
-            <div className="logo-icon" aria-hidden="true">🛰️</div>
+            <div className="logo-icon" aria-hidden="true">WA</div>
             <span className="logo-text">WebAudit Pro</span>
-            <span className="header-badge">MVP · Phase 1</span>
+            <span className="header-badge">Beta</span>
           </div>
         </div>
       </header>
@@ -21,15 +21,15 @@ const App: React.FC = () => {
         <div className="container">
           <section className="hero">
             <div className="hero-eyebrow">
-              <span>✦</span> AI-Powered Audit Engine
+              Website Audit Platform
             </div>
             <h1>
               Audit Any Website<br />
-              <span>Instantly & Free</span>
+              <span>Comprehensive Reports</span>
             </h1>
             <p className="hero-sub">
-              Analyze performance, SEO, accessibility, security, and
-              functionality — all in one place.
+              Run structured audits for performance, SEO, accessibility,
+              security, and functionality from a single dashboard.
             </p>
           </section>
 
@@ -40,7 +40,7 @@ const App: React.FC = () => {
       {/* Footer */}
       <footer className="footer">
         <div className="container">
-          WebAudit Pro · Built with FastAPI + React + Vite · Open Source MVP
+          WebAudit Pro · Automated website audits · Performance · SEO · Accessibility · Security
         </div>
       </footer>
     </div>

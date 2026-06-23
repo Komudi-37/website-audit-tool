@@ -60,13 +60,13 @@ const Home: React.FC = () => {
       />
 
       {status === "loading" && (
-        <StatusBanner type="loading" message="Connecting to audit engine…" />
+        <StatusBanner type="loading" message="Running audit…" />
       )}
       {status === "error" && (
         <StatusBanner type="error" message={error} />
       )}
       {status === "success" && (
-        <StatusBanner type="success" message="Audit completed successfully!" />
+        <StatusBanner type="success" message="Audit complete." />
       )}
 
       <section aria-label="Results area">
@@ -74,7 +74,7 @@ const Home: React.FC = () => {
           <ResultsPanel data={result} url={url} />
         ) : status !== "loading" ? (
           <div className="empty-state">
-            <div className="empty-icon">🔎</div>
+            <div className="empty-icon" aria-hidden="true" />
             <p className="empty-title">No audit run yet</p>
             <p className="empty-desc">
               Enter a URL above, select your audit categories, and click{" "}

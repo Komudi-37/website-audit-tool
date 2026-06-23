@@ -28,7 +28,7 @@ const AuditForm: React.FC<Props> = ({
       {/* URL Input */}
       <div className="input-group">
         <div className="url-input-wrapper">
-          <span className="url-input-icon">🌐</span>
+          <span className="url-input-icon" aria-hidden="true" />
           <input
             id="url-input"
             type="url"
@@ -54,7 +54,7 @@ const AuditForm: React.FC<Props> = ({
               Auditing…
             </>
           ) : (
-            <>▶ Run Audit</>
+            <>Run Audit</>
           )}
         </button>
       </div>

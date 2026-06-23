@@ -11,31 +11,31 @@ export const AUDIT_CATEGORIES: CategoryOption[] = [
   {
     id: "performance",
     label: "Performance",
-    icon: "⚡",
+    icon: "PERF",
     description: "Page speed, Core Web Vitals",
   },
   {
     id: "seo",
     label: "SEO",
-    icon: "🔍",
+    icon: "SEO",
     description: "Meta tags, headings, indexability",
   },
   {
     id: "accessibility",
     label: "Accessibility",
-    icon: "♿",
+    icon: "A11Y",
     description: "ARIA, contrast, keyboard nav",
   },
   {
     id: "security",
     label: "Security",
-    icon: "🔒",
+    icon: "SEC",
     description: "SSL, headers, CSP, HSTS",
   },
   {
     id: "functionality",
     label: "Functionality",
-    icon: "⚙️",
+    icon: "FUNC",
     description: "Navigation, links, forms",
   },
 ];
