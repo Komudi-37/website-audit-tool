@@ -69,7 +69,7 @@ const Home: React.FC = () => {
         <StatusBanner type="success" message="Audit complete." />
       )}
 
-      <section aria-label="Results area">
+      <section className="results-area" aria-label="Results area">
         {result ? (
           <ResultsPanel data={result} url={url} />
         ) : status !== "loading" ? (

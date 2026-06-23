@@ -24,7 +24,7 @@ const AuditForm: React.FC<Props> = ({
   };
 
   return (
-    <div className="audit-card">
+    <div className="audit-form-card">
       <section className="audit-primary" aria-labelledby="audit-primary-title">
         <div className="audit-primary-header">
           <h2 id="audit-primary-title" className="audit-primary-title">
