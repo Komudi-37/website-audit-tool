@@ -1,0 +1,223 @@
+0: Project Brief: AI-Powered Website Audit Tool (MVP)
+1: Project Objective
+2: Develop a web-based utility that audits any public website URL and generates a detailed audit report based on user-selected audit categories.
+3: The objective of the MVP is to create a working proof-of-concept that can analyze websites and generate meaningful reports without incurring any licensing or API costs.
+4: Example:
+5: Input: https://www.itchotels.com/in/en 
+6: Selected Audits:
+7: SEO Audit
+8: Performance Audit
+9: Accessibility Audit
+10: Output:
+11: Summary Score
+12: Detailed Findings
+13: Recommendations
+14: Downloadable PDF Report
+15: 
+16: Project Scope (MVP)
+17: User Flow
+18: Step 1 User enters website URL
+19: Step 2 User selects one or more audit categories
+20: Available Audit Categories:
+21: SEO Audit
+22: Performance Audit
+23: Accessibility Audit
+24: Security Audit
+25: Website Functionality Audit
+26: Step 3 User clicks “Run Audit”
+27: Step 4 System generates report
+28: Step 5 User views report and downloads PDF
+29: 
+30: Audit Categories
+31: 1. SEO Audit
+32: Checks:
+33: Presence of Title Tag
+34: Presence of Meta Description
+35: H1 Availability
+36: Canonical Tag
+37: Sitemap.xml
+38: Robots.txt
+39: Image Alt Text Coverage
+40: Broken Links
+41: Page Indexability
+42: Output:
+43: SEO Score /100
+44: List of Issues
+45: Recommendations
+46: 
+47: 2. Performance Audit
+48: Checks:
+49: Performance Score
+50: First Contentful Paint (FCP)
+51: Largest Contentful Paint (LCP)
+52: Cumulative Layout Shift (CLS)
+53: Time To Interactive
+54: Source:
+55: Google Lighthouse
+56: Output:
+57: Performance Score /100
+58: Recommendations
+59: 
+60: 3. Accessibility Audit
+61: Checks:
+62: Missing Alt Text
+63: Contrast Issues
+64: ARIA Labels
+65: Form Accessibility
+66: Keyboard Navigation Readiness
+67: Source:
+68: axe-core
+69: Output:
+70: Accessibility Score /100
+71: Issues List
+72: Recommendations
+73: 
+74: 4. Security Audit
+75: Checks:
+76: SSL Availability
+77: HTTPS Enforcement
+78: Security Headers
+79: HSTS
+80: X-Frame Options
+81: Content Security Policy
+82: Output:
+83: Security Score /100
+84: Security Findings
+85: 
+86: 5. Website Functionality Audit
+87: Checks:
+88: Homepage Loads Successfully
+89: Internal Links Working
+90: Contact Form Availability
+91: Navigation Links Working
+92: Broken Pages (404)
+93: Source:
+94: Playwright
+95: Output:
+96: Pass / Fail Report
+97: 
+98: Technical Requirements
+99: Backend
+100: Technology:
+101: Python
+102: Framework:
+103: FastAPI
+104: Responsibilities:
+105: Receive audit requests
+106: Execute audit modules
+107: Generate consolidated report
+108: Generate PDF
+109: 
+110: Frontend
+111: Technology:
+112: React
+113: Requirements:
+114: Simple UI with:
+115: URL Input Box
+116: Audit Category Selection
+117: Run Audit Button
+118: Results Dashboard
+119: PDF Download Option
+120: 
+121: Audit Engines
+122: Lighthouse
+123: Playwright
+124: axe-core
+125: BeautifulSoup
+126: Python Requests
+127: All open-source and free.
+128: 
+129: Report Structure
+130: Section 1
+131: Executive Summary
+132: Example:
+133: Website Audited: www.example.com
+134: Overall Score: 82/100
+135: 
+136: Section 2
+137: Category Scores
+138: SEO: 78
+139: Performance: 85
+140: Accessibility: 90
+141: Security: 75
+142: Functionality: 95
+143: 
+144: Section 3
+145: Detailed Findings
+146: Issue Description
+147: Severity:
+148: High
+149: Medium
+150: Low
+151: Recommendation
+152: 
+153: Section 4
+154: Action Plan
+155: Top 10 Improvements
+156: Priority Order
+157: 
+158: Non-Functional Requirements
+159: Must support any public website
+160: Must complete audit within 2–5 minutes
+161: Must be deployable on free hosting
+162: Must not require paid APIs
+163: Must support PDF export
+164: 
+165: Suggested Architecture
+166: Frontend (React)
+167: ↓
+168: FastAPI Backend
+169: ↓
+170: Audit Engine Layer
+171: Lighthouse
+172: Playwright
+173: axe-core
+174: SEO Analyzer
+175: ↓
+176: Report Generator
+177: ↓
+178: PDF Export
+179: 
+180: Free Hosting Options
+181: Frontend:
+182: Vercel
+183: Netlify
+184: Backend:
+185: Render Free Tier
+186: Railway Free Tier
+187: 
+188: Project Deliverables
+189: Source Code Repository
+190: Working Hosted Demo URL
+191: Sample Audit Reports
+192: Required Samples:
+193: https://www.itchotels.com/in/en
+194: www.microsoft.com
+195: 
+196: Deployment Guide
+197: Technical Documentation
+198: 
+199: Stretch Goals (Optional)
+200: If time permits:
+201: Website Screenshot Capture
+202: Mobile/Desktop Comparison
+203: Competitor Comparison
+204: AI-Based Recommendations
+205: Historical Audit Tracking
+206: These are not mandatory for MVP.
+207: 
+208: Timeline
+209: Week 1
+210: Setup architecture
+211: Integrate Lighthouse
+212: Integrate SEO module
+213: Week 2
+214: Integrate Accessibility
+215: Integrate Security
+216: Integrate Functionality checks
+217: Week 3
+218: Build Dashboard
+219: Build PDF export
+220: Deploy MVP
+221: Final Deliverable:
+222: Hosted MVP with downloadable audit reports.
