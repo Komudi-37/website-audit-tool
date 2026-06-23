@@ -20,12 +20,10 @@ const App: React.FC = () => {
       <main>
         <div className="container">
           <section className="hero">
-            <div className="hero-eyebrow">
-              Website Audit Platform
-            </div>
-            <h1>
-              Audit Any Website<br />
-              <span>Comprehensive Reports</span>
+            <p className="hero-eyebrow">Website Audit Platform</p>
+            <h1 className="hero-title">
+              Audit any website.
+              <span className="hero-title-accent"> Get comprehensive reports.</span>
             </h1>
             <p className="hero-sub">
               Run structured audits for performance, SEO, accessibility,
