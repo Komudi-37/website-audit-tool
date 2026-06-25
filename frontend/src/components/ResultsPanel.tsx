@@ -16,6 +16,17 @@ interface Props {
 const ResultsPanel: React.FC<Props> = ({ data, url }) => {
   const response = data as Partial<AuditResponse>;
   const results = Array.isArray(response.results) ? response.results : [];
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy URL:", err);
+    }
+  };
 
   const perfResult = results.find((r) => r.audit_type === "performance") as
     | AuditResult
@@ -49,9 +60,19 @@ const ResultsPanel: React.FC<Props> = ({ data, url }) => {
           <h2 className="results-title">Audit Results</h2>
           <p className="results-subtitle">Report generated for the submitted URL</p>
         </div>
-        <code className="results-url" title={url}>
-          {url}
-        </code>
+        <div className="results-url-wrapper">
+          <code className="results-url" title={url}>
+            {url}
+          </code>
+          <button
+            className="btn-copy"
+            onClick={handleCopyUrl}
+            aria-label="Copy URL"
+            title="Copy URL"
+          >
+            {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
       </header>
       {hasRenderedCards && (
         <div style={{ display: "flex", justifyContent: "flex-end", margin: "1rem 0" }}>
