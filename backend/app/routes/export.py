@@ -1,5 +1,6 @@
 import io
 import os
+import html
 from datetime import datetime
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -90,8 +91,22 @@ def _build_pdf(data: dict) -> bytes:
     score_data = [["Audit Type", "Score", "Status"]]
     for r in results:
         score = round(r.get("score", 0), 1)
-        status = "Good" if score >= 90 else "Needs Work" if score >= 50 else "Poor"
-        score_data.append([r.get("audit_type", "").capitalize(), f"{score} / 100", status])
+        status = "Good" if score >= 80 else "Needs Work" if score >= 50 else "Poor"
+        audit_type = r.get("audit_type", "").capitalize()
+        
+        # For performance audit, show mobile/desktop scores
+        if audit_type.lower() == "performance":
+            metrics = r.get("metrics", {})
+            mobile_score = metrics.get("mobile_score")
+            desktop_score = metrics.get("desktop_score")
+            if mobile_score is not None and desktop_score is not None:
+                score_display = f"Mobile: {mobile_score} · Desktop: {desktop_score}"
+            else:
+                score_display = f"{score} / 100"
+        else:
+            score_display = f"{score} / 100"
+        
+        score_data.append([audit_type, score_display, status])
 
     score_table = Table(score_data, colWidths=[6*cm, 4*cm, 7*cm])
     score_table.setStyle(TableStyle([
@@ -140,7 +155,7 @@ def _build_pdf(data: dict) -> bytes:
                 findings_data.append([
                     sev.capitalize(),
                     f.get("title", ""),
-                    Paragraph(f.get("description", "")[:200], small_style),
+                  Paragraph(html.escape(f.get("description", "")[:200]), small_style),
                 ])
             f_table = Table(findings_data, colWidths=[2.5*cm, 5*cm, 9.5*cm])
             f_table.setStyle(TableStyle([
@@ -162,7 +177,7 @@ def _build_pdf(data: dict) -> bytes:
         if recommendations:
             story.append(Paragraph("Recommendations", ParagraphStyle("RecHead", parent=styles["Normal"], fontSize=10, fontName="Helvetica-Bold", textColor=colors.HexColor("#2D3748"), spaceBefore=6, spaceAfter=4)))
             for i, rec in enumerate(recommendations, 1):
-                story.append(Paragraph(f"{i}. {rec}", body_style))
+                story.append(Paragraph(f"{i}. {html.escape(rec)}", body_style))
             story.append(Spacer(1, 0.6*cm))
 
     # ── Footer via canvas callback ───────────────────────────────────

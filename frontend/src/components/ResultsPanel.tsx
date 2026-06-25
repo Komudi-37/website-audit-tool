@@ -80,7 +80,7 @@ const ResultsPanel: React.FC<Props> = ({ data, url }) => {
             className="btn-primary"
             onClick={async () => {
               try {
-                await downloadPDF(response);
+            await downloadPDF({ ...response, url });
               } catch (err) {
                 alert("PDF generation failed. Please try again.");
               }
