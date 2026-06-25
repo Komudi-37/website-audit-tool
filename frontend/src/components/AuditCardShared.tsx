@@ -62,7 +62,11 @@ export function MetricCard({
   );
 }
 
-export const AUDIT_ERROR_FINDING_IDS = new Set(["perf-error", "a11y-audit-failed"]);
+export const AUDIT_ERROR_FINDING_IDS = new Set([
+  "perf-error",
+  "a11y-audit-failed",
+  "func-audit-failed",
+]);
 
 export function AuditErrorBanner({ finding }: { finding: Finding }) {
   return (

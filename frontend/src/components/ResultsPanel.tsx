@@ -4,14 +4,14 @@ import PerformanceCard from "./PerformanceCard";
 import SEOCard from "./SEOCard";
 import AccessibilityCard from "./AccessibilityCard";
 import SecurityCard from "./SecurityCard";
+import FunctionalityCard from "./FunctionalityCard";
 import ResultsSummary from "./ResultsSummary";
+import { downloadPDF } from "../services/api";
 
 interface Props {
   data: unknown;
   url: string;
 }
-
-const RENDERED_TYPES = new Set(["performance", "seo", "accessibility", "security"]);
 
 const ResultsPanel: React.FC<Props> = ({ data, url }) => {
   const response = data as Partial<AuditResponse>;
@@ -27,17 +27,18 @@ const ResultsPanel: React.FC<Props> = ({ data, url }) => {
   const securityResult = results.find((r) => r.audit_type === "security") as
     | AuditResult
     | undefined;
+  const functionalityResult = results.find((r) => r.audit_type === "functionality") as
+    | AuditResult
+    | undefined;
 
-  const renderedResults = [perfResult, seoResult, accessibilityResult, securityResult].filter(
-    Boolean
-  ) as AuditResult[];
+  const renderedResults = [
+    perfResult,
+    seoResult,
+    accessibilityResult,
+    securityResult,
+    functionalityResult,
+  ].filter(Boolean) as AuditResult[];
 
-  const rawData = { ...response };
-  if (Array.isArray(rawData.results)) {
-    rawData.results = rawData.results.filter((r) => !RENDERED_TYPES.has(r.audit_type));
-  }
-
-  const formatted = JSON.stringify(rawData, null, 2);
   const hasRenderedCards = renderedResults.length > 0;
   const overallScore = response.overall_score ?? 0;
 
@@ -52,6 +53,22 @@ const ResultsPanel: React.FC<Props> = ({ data, url }) => {
           {url}
         </code>
       </header>
+      {hasRenderedCards && (
+        <div style={{ display: "flex", justifyContent: "flex-end", margin: "1rem 0" }}>
+          <button
+            className="btn-primary"
+            onClick={async () => {
+              try {
+                await downloadPDF(response);
+              } catch (err) {
+                alert("PDF generation failed. Please try again.");
+              }
+            }}
+          >
+            Download PDF Report
+          </button>
+        </div>
+      )}
 
       {hasRenderedCards && (
         <ResultsSummary overallScore={overallScore} results={renderedResults} />
@@ -63,16 +80,7 @@ const ResultsPanel: React.FC<Props> = ({ data, url }) => {
           {seoResult && <SEOCard result={seoResult} />}
           {accessibilityResult && <AccessibilityCard result={accessibilityResult} />}
           {securityResult && <SecurityCard result={securityResult} />}
-        </div>
-      )}
-
-      {rawData.results && rawData.results.length > 0 && (
-        <div className={`raw-response-card${hasRenderedCards ? " raw-response-card--spaced" : ""}`}>
-          <div className="raw-response-header">
-            <span>API Response (Unimplemented Audits)</span>
-            <span className="raw-response-format">JSON</span>
-          </div>
-          <pre className="raw-response-body">{formatted}</pre>
+          {functionalityResult && <FunctionalityCard result={functionalityResult} />}
         </div>
       )}
     </section>

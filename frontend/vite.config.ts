@@ -10,6 +10,8 @@ export default defineConfig({
       // Proxy /health and /audit* → FastAPI backend
       '/health': 'http://localhost:8000',
       '/audit':  'http://localhost:8000',
+      '/screenshots':  'http://localhost:8000',
+      '/export':       'http://localhost:8000',
     },
   },
 })

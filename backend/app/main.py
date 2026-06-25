@@ -1,15 +1,25 @@
 """
 FastAPI application entry point.
 """
+import sys
+import sys
+import asyncio
+
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(
+        asyncio.WindowsProactorEventLoopPolicy()
+    )
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.routes.health import router as health_router
 from app.routes.audit import router as audit_router
+from app.routes.export import router as export_router
 
 # Setup logging before anything else
 setup_logging()
@@ -45,6 +55,11 @@ def create_app() -> FastAPI:
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(health_router)
     app.include_router(audit_router)
+    app.include_router(export_router)
+    import os
+    screenshots_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "screenshots")
+    os.makedirs(screenshots_dir, exist_ok=True)
+    app.mount("/screenshots", StaticFiles(directory=screenshots_dir), name="screenshots")
 
     return app
 

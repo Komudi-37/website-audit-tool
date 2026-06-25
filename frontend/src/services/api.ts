@@ -21,3 +21,22 @@ export async function runAudit(payload: AuditRequest): Promise<AuditResponse> {
   }
   return res.json();
 }
+export async function downloadPDF(payload: object): Promise<void> {
+  const res = await fetch("/export/pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error("PDF generation failed");
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "audit-report.pdf";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
