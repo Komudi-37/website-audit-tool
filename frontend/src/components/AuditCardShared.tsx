@@ -62,11 +62,7 @@ export function MetricCard({
   );
 }
 
-export const AUDIT_ERROR_FINDING_IDS = new Set([
-  "perf-error",
-  "a11y-audit-failed",
-  "func-audit-failed",
-]);
+export const AUDIT_ERROR_FINDING_IDS = new Set(["perf-error", "a11y-audit-failed"]);
 
 export function AuditErrorBanner({ finding }: { finding: Finding }) {
   return (
@@ -85,6 +81,7 @@ interface AuditCardLayoutProps {
   title: string;
   categoryTag: string;
   score: number;
+  scoreLabel?: string;
   metrics: React.ReactNode;
   findings: Finding[];
   recommendations: string[];
@@ -96,6 +93,7 @@ export function AuditCardLayout({
   title,
   categoryTag,
   score,
+  scoreLabel,
   metrics,
   findings,
   recommendations,
@@ -121,6 +119,9 @@ export function AuditCardLayout({
             {displayScore}
           </span>
           <span className="audit-score-label">Score</span>
+          {scoreLabel && (
+            <span className="audit-score-sublabel">{scoreLabel}</span>
+          )}
         </div>
       </header>
 

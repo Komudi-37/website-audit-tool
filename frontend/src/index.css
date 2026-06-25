@@ -1357,4 +1357,69 @@ main:focus {
     font-size: 2rem;
   }
 }
+/* ── Performance mobile/desktop tabs ─────────────────────────────────────── */
+.perf-tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.perf-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.perf-tab:hover {
+  background: var(--surface-hover, rgba(0,0,0,0.04));
+  color: var(--text-primary);
+}
+
+.perf-tab--active {
+  background: var(--accent, #2563eb);
+  border-color: var(--accent, #2563eb);
+  color: #fff;
+}
+
+.perf-tab-score {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.25);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.4;
+  min-width: 1.6rem;
+  text-align: center;
+}
+
+.perf-tab:not(.perf-tab--active) .perf-tab-score {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+/* Score sublabel (Mobile: X · Desktop: Y) */
+.audit-score-sublabel {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .perf-tabs {
+    flex-direction: column;
+  }
+}
 
