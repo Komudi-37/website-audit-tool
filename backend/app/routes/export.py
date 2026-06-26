@@ -1,6 +1,10 @@
 import io
 import os
+
 import html
+
+from xml.sax.saxutils import escape
+
 from datetime import datetime
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -66,7 +70,7 @@ def _build_pdf(data: dict) -> bytes:
     overall_score = round(data.get("overall_score", 0), 1)
 
     cover_data = [
-        ["Website", url],
+        ["Website", escape(url)],
         ["Audit Date", formatted_date],
         ["Overall Score", f"{overall_score} / 100"],
     ]
@@ -144,7 +148,7 @@ def _build_pdf(data: dict) -> bytes:
     for r in results:
         audit_type = r.get("audit_type", "").capitalize()
         score = round(r.get("score", 0), 1)
-        story.append(Paragraph(f"{audit_type} — {score}/100", h2_style))
+        story.append(Paragraph(f"{escape(audit_type)} — {score}/100", h2_style))
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#E2E8F0")))
 
         findings = r.get("findings", [])
@@ -154,8 +158,12 @@ def _build_pdf(data: dict) -> bytes:
                 sev = f.get("severity", "info")
                 findings_data.append([
                     sev.capitalize(),
+
                     f.get("title", ""),
                   Paragraph(html.escape(f.get("description", "")[:200]), small_style),
+
+                    escape(f.get("title", "")),
+                    Paragraph(escape(f.get("description", "")[:200]), small_style),
                 ])
             f_table = Table(findings_data, colWidths=[2.5*cm, 5*cm, 9.5*cm])
             f_table.setStyle(TableStyle([
@@ -177,7 +185,11 @@ def _build_pdf(data: dict) -> bytes:
         if recommendations:
             story.append(Paragraph("Recommendations", ParagraphStyle("RecHead", parent=styles["Normal"], fontSize=10, fontName="Helvetica-Bold", textColor=colors.HexColor("#2D3748"), spaceBefore=6, spaceAfter=4)))
             for i, rec in enumerate(recommendations, 1):
+
                 story.append(Paragraph(f"{i}. {html.escape(rec)}", body_style))
+
+                story.append(Paragraph(f"{i}. {escape(rec)}", body_style))
+
             story.append(Spacer(1, 0.6*cm))
 
     # ── Footer via canvas callback ───────────────────────────────────
