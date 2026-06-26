@@ -45,7 +45,7 @@ async def run_audit(body: AuditRequest) -> AuditResponse:
             results.append(run_lighthouse_audit(str(body.url)))
 
         elif cat == "seo":
-            results.append(run_seo_audit(str(body.url)))
+            results.append(await run_seo_audit(str(body.url)))
 
         elif cat == "accessibility":
             results.append(await run_accessibility_audit(str(body.url)))
@@ -97,13 +97,13 @@ async def run_audit(body: AuditRequest) -> AuditResponse:
 @router.post("/audit/performance", response_model=AuditResult, tags=["Audit"])
 async def run_audit_performance(body: AuditRequest) -> AuditResult:
     """Standalone testing endpoint for the Performance audit engine."""
-    return run_lighthouse_audit(str(body.url))
+    return await run_seo_audit(str(body.url))
 
 
 @router.post("/audit/seo", response_model=AuditResult, tags=["Audit"])
 async def run_audit_seo(body: AuditRequest) -> AuditResult:
     """Standalone testing endpoint for the SEO audit engine."""
-    return run_seo_audit(str(body.url))
+    return await run_seo_audit(str(body.url))
 
 
 @router.post("/audit/accessibility", response_model=AuditResult, tags=["Audit"])

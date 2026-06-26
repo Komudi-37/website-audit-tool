@@ -1,5 +1,6 @@
 import logging
-import requests
+import asyncio
+import httpx
 from bs4 import BeautifulSoup
 from typing import List, Dict, Any
 from urllib.parse import urljoin, urlparse
@@ -7,26 +8,27 @@ from app.schemas.audit import AuditResult, Finding
 
 logger = logging.getLogger("audit_tool.seo")
 
-def run_seo_audit(url: str) -> AuditResult:
+async def run_seo_audit(url: str) -> AuditResult:
     """Run basic SEO audit against a given URL."""
     logger.info(f"Starting SEO audit for {url}")
     
     try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.text, "html.parser")
-        
-        return _analyze_seo(soup, url, dict(response.headers))
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            return await _analyze_seo(soup, url, dict(response.headers))
 
-    except requests.RequestException as e:
+    except httpx.HTTPStatusError as e:
         logger.exception(f"Error fetching URL {url} for SEO audit")
         return _generate_error_result(url, f"Failed to fetch URL: {str(e)}")
     except Exception as e:
         logger.exception(f"Error running SEO audit for {url}")
         return _generate_error_result(url, str(e))
 
-def _analyze_seo(soup: BeautifulSoup, url: str, headers: Dict[str, str] = None) -> AuditResult:
+async def _analyze_seo(soup: BeautifulSoup, url: str, headers: Dict[str, str] = None) -> AuditResult:
     findings: List[Finding] = []
     recommendations: List[str] = []
     score = 100
@@ -216,7 +218,7 @@ def _analyze_seo(soup: BeautifulSoup, url: str, headers: Dict[str, str] = None) 
     metrics["robots_txt_url"] = robots_url
     metrics["robots_txt_exists"] = False
     try:
-        r = requests.get(robots_url, timeout=5)
+        r = httpx.get(robots_url, timeout=5)
         if r.status_code == 200:
             metrics["robots_txt_exists"] = True
             findings.append(Finding(
@@ -252,7 +254,7 @@ def _analyze_seo(soup: BeautifulSoup, url: str, headers: Dict[str, str] = None) 
     metrics["sitemap_url"] = sitemap_url
     metrics["sitemap_exists"] = False
     try:
-        r = requests.get(sitemap_url, timeout=5)
+        r = httpx.get(sitemap_url, timeout=5)
         if r.status_code == 200:
             metrics["sitemap_exists"] = True
             findings.append(Finding(
@@ -363,16 +365,15 @@ def _analyze_seo(soup: BeautifulSoup, url: str, headers: Dict[str, str] = None) 
     links_to_test = unique_internal_urls[:20]
     broken_links = []
 
-    for test_url in links_to_test:
-        try:
-            r = requests.head(test_url, timeout=3, allow_redirects=True)
-            if r.status_code >= 400:
-                r = requests.get(test_url, timeout=3, allow_redirects=True)
-            
-            if r.status_code >= 400:
-                broken_links.append({"url": test_url, "status": r.status_code})
-        except Exception as e:
-            broken_links.append({"url": test_url, "status": "Error", "reason": str(e)})
+    if links_to_test:
+        async with httpx.AsyncClient() as client:
+            tasks = [_check_link_url(client, u) for u in links_to_test]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for r in results:
+                if isinstance(r, dict):
+                    broken_links.append(r)
+                elif isinstance(r, Exception):
+                    logger.warning("Link checking task raised an exception: %s", r)
 
     metrics["total_internal_links_found"] = total_internal_found
     metrics["links_checked"] = len(links_to_test)
@@ -427,3 +428,26 @@ def _generate_error_result(url: str, error_msg: str) -> AuditResult:
         ],
         recommendations=["Ensure the URL is publicly accessible."]
     )
+
+async def _check_link_url(client: httpx.AsyncClient, url: str) -> dict[str, Any] | None:
+    """Check if a URL returns a successful status code."""
+    try:
+        # Use HEAD request as it is faster
+        resp = await client.head(url, timeout=6.0, follow_redirects=True)
+        # Fallback to GET for servers that block/fail on HEAD (returning 400 or 405)
+        if resp.status_code in (400, 405):
+            resp = await client.get(url, timeout=6.0, follow_redirects=True)
+
+        if resp.status_code >= 400:
+            return {"url": url, "status": f"HTTP {resp.status_code}"}
+        return None
+    except httpx.TimeoutException:
+        return {"url": url, "status": "timeout"}
+    except httpx.ConnectError:
+        return {"url": url, "status": "connection_error"}
+    except httpx.HTTPStatusError as exc:
+        return {"url": url, "status": f"HTTP {exc.response.status_code}"}
+    except httpx.RequestError as exc:
+        return {"url": url, "status": "request_error", "detail": str(exc)[:80]}
+    except Exception as exc:
+        return {"url": url, "status": "error", "detail": str(exc)[:80]}
