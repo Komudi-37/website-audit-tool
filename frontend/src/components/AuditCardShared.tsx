@@ -62,11 +62,7 @@ export function MetricCard({
   );
 }
 
-export const AUDIT_ERROR_FINDING_IDS = new Set([
-  "perf-error",
-  "a11y-audit-failed",
-  "func-audit-failed",
-]);
+export const AUDIT_ERROR_FINDING_IDS = new Set(["perf-error", "a11y-audit-failed"]);
 
 export function AuditErrorBanner({ finding }: { finding: Finding }) {
   return (
@@ -85,6 +81,7 @@ interface AuditCardLayoutProps {
   title: string;
   categoryTag: string;
   score: number;
+  scoreLabel?: string;
   metrics: React.ReactNode;
   findings: Finding[];
   recommendations: string[];
@@ -96,6 +93,7 @@ export function AuditCardLayout({
   title,
   categoryTag,
   score,
+  scoreLabel,
   metrics,
   findings,
   recommendations,
@@ -109,6 +107,12 @@ export function AuditCardLayout({
     ? findings.filter((f) => !AUDIT_ERROR_FINDING_IDS.has(f.id))
     : findings;
 
+  const [showAllFindings, setShowAllFindings] = React.useState(false);
+  const [showAllRecommendations, setShowAllRecommendations] = React.useState(false);
+
+  const displayedFindings = showAllFindings ? operationalFindings : operationalFindings.slice(0, 3);
+  const displayedRecommendations = showAllRecommendations ? recommendations : recommendations.slice(0, 3);
+
   return (
     <article className={`audit-card ${className}`.trim()}>
       <header className="audit-card-header">
@@ -121,6 +125,9 @@ export function AuditCardLayout({
             {displayScore}
           </span>
           <span className="audit-score-label">Score</span>
+          {scoreLabel && (
+            <span className="audit-score-sublabel">{scoreLabel}</span>
+          )}
         </div>
       </header>
 
@@ -140,7 +147,7 @@ export function AuditCardLayout({
             <span className="audit-section-count">{operationalFindings.length}</span>
           </h4>
           <ul className="audit-findings-list">
-            {operationalFindings.map((f, i) => (
+            {displayedFindings.map((f, i) => (
               <li key={f.id || i} className="audit-finding-item">
                 <div className="audit-finding-header">
                   <SeverityBadge severity={f.severity} />
@@ -154,6 +161,15 @@ export function AuditCardLayout({
               </li>
             ))}
           </ul>
+          {operationalFindings.length > 3 && (
+            <button
+              className="btn-toggle"
+              onClick={() => setShowAllFindings(!showAllFindings)}
+              aria-expanded={showAllFindings}
+            >
+              {showAllFindings ? "Show less" : `Show more (${operationalFindings.length - 3} more)`}
+            </button>
+          )}
         </section>
       )}
 
@@ -164,12 +180,21 @@ export function AuditCardLayout({
             <span className="audit-section-count">{recommendations.length}</span>
           </h4>
           <ol className="audit-recommendations-list">
-            {recommendations.map((rec, i) => (
+            {displayedRecommendations.map((rec, i) => (
               <li key={i} className="audit-recommendation-item">
                 {rec}
               </li>
             ))}
           </ol>
+          {recommendations.length > 3 && (
+            <button
+              className="btn-toggle"
+              onClick={() => setShowAllRecommendations(!showAllRecommendations)}
+              aria-expanded={showAllRecommendations}
+            >
+              {showAllRecommendations ? "Show less" : `Show more (${recommendations.length - 3} more)`}
+            </button>
+          )}
         </section>
       )}
     </article>

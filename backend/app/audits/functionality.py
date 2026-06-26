@@ -190,6 +190,7 @@ async def run_functionality_audit(url: str) -> AuditResult:
                     await page.wait_for_timeout(page_settle_ms)
                 # Screenshot capture
                 screenshot_path = None
+                screenshot_filename = None
                 try:
                     safe_name = re.sub(r"[^a-zA-Z0-9]", "_", urlparse(url).netloc)
                     from datetime import datetime
@@ -199,11 +200,13 @@ async def run_functionality_audit(url: str) -> AuditResult:
                     screenshots_dir = os.path.abspath(os.path.join(base_dir, "..", "..", "screenshots"))
                     os.makedirs(screenshots_dir, exist_ok=True)
                     screenshot_path = os.path.join(screenshots_dir, filename)
+                    screenshot_filename = filename
                     await page.screenshot(path=screenshot_path, full_page=True)
                     logger.info("Screenshot saved: %s", screenshot_path)
                 except Exception as ss_err:
                     logger.warning("Screenshot capture failed (non-fatal): %s", ss_err)
                     screenshot_path = None
+                    screenshot_filename = None
 
                 html = await page.content()
 
@@ -228,7 +231,7 @@ async def run_functionality_audit(url: str) -> AuditResult:
                     await browser.close()
 
         # Perform the actual logic checks on the retrieved HTML content
-        return await _analyze_functionality(html, status, url,screenshot_path)
+        return await _analyze_functionality(html, status, url, screenshot_filename)
 
     except Exception as exc:
         import traceback
@@ -245,12 +248,12 @@ async def run_functionality_audit(url: str) -> AuditResult:
         return _generate_error_result(url, enriched, title=title)
 
 
-async def _analyze_functionality(html: str, http_status: int | str, url: str,screenshot_path: str | None=None) -> AuditResult:
+async def _analyze_functionality(html: str, http_status: int | str, url: str, screenshot_filename: str | None = None) -> AuditResult:
     findings: list[Finding] = []
     recommendations: list[str] = []
     metrics: dict[str, Any] = {}
     score = 100.0
-    metrics["screenshot_path"] = screenshot_path
+    metrics["screenshot_path"] = screenshot_filename
     soup = BeautifulSoup(html, "html.parser")
 
     # 1. Homepage loads successfully check
