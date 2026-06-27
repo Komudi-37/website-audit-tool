@@ -2,7 +2,6 @@
 FastAPI application entry point.
 """
 import sys
-import sys
 import asyncio
 
 if sys.platform.startswith("win"):
@@ -38,8 +37,8 @@ def create_app() -> FastAPI:
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
         description="AI-Powered Website Audit Tool API",
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/docs" if settings.DEBUG else None,
+        redoc_url="/redoc" if settings.DEBUG else None,
         lifespan=lifespan,
     )
 

@@ -80,7 +80,14 @@ const ResultsPanel: React.FC<Props> = ({ data, url }) => {
             className="btn-primary"
             onClick={async () => {
               try {
-            await downloadPDF({ ...response, url });
+                const deduplicatedResponse = {
+                  ...response,
+                  url,
+                  results: Array.from(
+                    new Map(results.map(r => [r.audit_type, r])).values()
+                  )
+                };
+                await downloadPDF(deduplicatedResponse);
               } catch (err) {
                 alert("PDF generation failed. Please try again.");
               }

@@ -22,6 +22,8 @@ export async function runAudit(payload: AuditRequest): Promise<AuditResponse> {
   return res.json();
 }
 export async function downloadPDF(payload: object): Promise<void> {
+  console.log("PDF payload results count:", (payload as any)?.results?.length);
+  console.log("PDF payload first result findings count:", (payload as any)?.results?.[0]?.findings?.length);
   const res = await fetch("/export/pdf", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
