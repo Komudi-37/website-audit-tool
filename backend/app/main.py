@@ -10,9 +10,12 @@ if sys.platform.startswith("win"):
     )
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.logging_config import setup_logging
@@ -20,9 +23,10 @@ from app.routes.health import router as health_router
 from app.routes.audit import router as audit_router
 from app.routes.export import router as export_router
 
-# Setup logging before anything else
 setup_logging()
 logger = logging.getLogger("audit_tool")
+
+from app.core.limiter import limiter
 
 
 def create_app() -> FastAPI:
@@ -42,6 +46,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # ── Rate limiting ─────────────────────────────────────────────────────────
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
     # ── CORS ──────────────────────────────────────────────────────────────────
     app.add_middleware(
         CORSMiddleware,
@@ -55,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(audit_router)
     app.include_router(export_router)
+
     import os
     screenshots_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "screenshots")
     os.makedirs(screenshots_dir, exist_ok=True)
