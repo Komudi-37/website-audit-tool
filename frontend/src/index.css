@@ -5,15 +5,6 @@
   --safe-area-right: env(safe-area-inset-right, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
-  /* Colors */
-  --bg-base:        #09090b;
-  --bg-surface:     #0f1117;
-  --bg-card:        #13161f;
-  --bg-card-hover:  #181c27;
-  --bg-elevated:    #1a1f2b;
-  --border:         rgba(255,255,255,0.08);
-  --border-hover:   rgba(255,255,255,0.14);
-  --border-focus:   rgba(99,102,241,0.55);
 
   /* Brand */
   --indigo:         #6366f1;
@@ -32,11 +23,6 @@
   --blue:           #3b82f6;
   --blue-dim:       rgba(59,130,246,0.15);
 
-  /* Text */
-  --text-primary:   #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-muted:     #94949e;
-
   /* Spacing */
   --space-1: 4px;
   --space-2: 8px;
@@ -50,11 +36,48 @@
   --radius-md:  10px;
   --radius-lg:  14px;
   --radius-xl:  16px;
+}
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.18);
-  --shadow-card: 0 1px 2px rgba(0,0,0,0.16);
-  --focus-ring: 0 0 0 2px var(--bg-base), 0 0 0 4px rgba(99,102,241,0.45);
+/* ── Dark Mode (default) ──────────────────────────────────────────────────── */
+:root,
+html[data-theme="dark"] {
+  --bg-base:        #09090b;
+  --bg-surface:     #0f1117;
+  --bg-card:        #13161f;
+  --bg-card-hover:  #181c27;
+  --bg-elevated:    #1a1f2b;
+  --border:         rgba(255,255,255,0.08);
+  --border-hover:   rgba(255,255,255,0.14);
+  --border-focus:   rgba(99,102,241,0.55);
+  --text-primary:   #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted:     #94949e;
+  --shadow-sm:      0 1px 2px rgba(0,0,0,0.18);
+  --shadow-card:    0 1px 2px rgba(0,0,0,0.16);
+  --focus-ring:     0 0 0 2px #09090b, 0 0 0 4px rgba(99,102,241,0.45);
+  --header-bg:      rgba(9,9,11,0.85);
+  --url-input-hover-bg: #0c0c0f;
+}
+
+/* ── Light Mode ───────────────────────────────────────────────────────────── */
+html[data-theme="light"] {
+  --bg-base:        #f8f8fc;
+  --bg-surface:     #ffffff;
+  --bg-card:        #f1f1f7;
+  --bg-card-hover:  #eaeaf2;
+  --bg-elevated:    #e8e8f0;
+  --border:         rgba(0,0,0,0.08);
+  --border-hover:   rgba(0,0,0,0.14);
+  --border-focus:   rgba(99,102,241,0.55);
+  --text-primary:   #0a0a0f;
+  --text-secondary: #4a4a5a;
+  --text-muted:     #6a6a7a;
+  --shadow-sm:      0 1px 3px rgba(0,0,0,0.08);
+  --shadow-card:    0 1px 3px rgba(0,0,0,0.07);
+  --focus-ring:     0 0 0 2px #f8f8fc, 0 0 0 4px rgba(99,102,241,0.45);
+  --header-bg:      rgba(248,248,252,0.85);
+  --url-input-hover-bg: #f4f4f8;
+  --indigo-dim:     rgba(99,102,241,0.1);
 }
 
 /* ── Reset ────────────────────────────────────────────────────────────────── */
@@ -70,6 +93,7 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -143,7 +167,7 @@ main:focus {
 /* ── Header ───────────────────────────────────────────────────────────────── */
 .header {
   border-bottom: 1px solid var(--border);
-  background: rgba(9,9,11,0.85);
+  background: var(--header-bg);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   position: sticky;
@@ -190,6 +214,34 @@ main:focus {
   border: 1px solid var(--border);
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+/* ── Theme Toggle ─────────────────────────────────────────────────────────── */
+.theme-toggle {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+@media (hover: hover) {
+  .theme-toggle:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-hover);
+  }
+}
+
+.theme-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* ── Hero ─────────────────────────────────────────────────────────────────── */
@@ -333,7 +385,7 @@ main:focus {
 @media (hover: hover) {
   .url-input:hover:not(:disabled) {
     border-color: var(--border-hover);
-    background: #0c0c0f;
+    background: var(--url-input-hover-bg);
   }
 }
 .url-input:focus {
@@ -1079,7 +1131,6 @@ main:focus {
     display: inline;
   }
 
-  /* Minimum readable label size on mobile (desktop typography unchanged) */
   .hero-eyebrow,
   .url-input-label,
   .section-label,
@@ -1459,6 +1510,7 @@ main:focus {
     min-width: 120px;
   }
 }
+
 /* ── Performance mobile/desktop tabs ─────────────────────────────────────── */
 .perf-tabs {
   display: flex;
@@ -1472,7 +1524,7 @@ main:focus {
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-secondary);
   font-size: 0.85rem;
@@ -1483,14 +1535,14 @@ main:focus {
 
 @media (hover: hover) {
   .perf-tab:hover {
-    background: var(--surface-hover, rgba(0,0,0,0.04));
+    background: var(--bg-card-hover);
     color: var(--text-primary);
   }
 }
 
 .perf-tab--active {
-  background: var(--accent, #2563eb);
-  border-color: var(--accent, #2563eb);
+  background: var(--indigo);
+  border-color: var(--indigo);
   color: #fff;
 }
 
@@ -1507,11 +1559,11 @@ main:focus {
 }
 
 .perf-tab:not(.perf-tab--active) .perf-tab-score {
-  background: var(--border);
+  background: var(--bg-elevated);
   color: var(--text-primary);
+  border: 1px solid var(--border);
 }
 
-/* Score sublabel (Mobile: X · Desktop: Y) */
 .audit-score-sublabel {
   display: block;
   font-size: 0.7rem;
@@ -1526,4 +1578,3 @@ main:focus {
     flex-direction: column;
   }
 }
-

@@ -1,8 +1,21 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Home from "./pages/Home";
 import "./index.css";
 
 const App: React.FC = () => {
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    return (localStorage.getItem("theme") as "dark" | "light") || "dark";
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === "dark" ? "light" : "dark");
+  };
+
   return (
     <div className="app-wrapper">
       <a href="#main-content" className="skip-link">
@@ -15,6 +28,13 @@ const App: React.FC = () => {
             <div className="logo-icon" aria-hidden="true">WA</div>
             <span className="logo-text">WebAudit Pro</span>
             <span className="header-badge">Beta</span>
+            <button
+              className="theme-toggle"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            >
+              {theme === "dark" ? "☀️" : "🌙"}
+            </button>
           </div>
         </div>
       </header>
