@@ -166,6 +166,7 @@ export function AuditCardLayout({
               className="btn-toggle"
               onClick={() => setShowAllFindings(!showAllFindings)}
               aria-expanded={showAllFindings}
+              title={showAllFindings ? "Show fewer findings" : "Show all findings"}
             >
               {showAllFindings ? "Show less" : `Show more (${operationalFindings.length - 3} more)`}
             </button>
@@ -191,6 +192,7 @@ export function AuditCardLayout({
               className="btn-toggle"
               onClick={() => setShowAllRecommendations(!showAllRecommendations)}
               aria-expanded={showAllRecommendations}
+              title={showAllRecommendations ? "Show fewer recommendations" : "Show all recommendations"}
             >
               {showAllRecommendations ? "Show less" : `Show more (${recommendations.length - 3} more)`}
             </button>

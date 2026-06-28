@@ -107,26 +107,12 @@ const FunctionalityCard: React.FC<Props> = ({ result }) => {
       }
     />
     {(result.metrics as Record<string,unknown>).screenshot_path &&(
-      <div style={{marginTop:"1rem"}}>
-      <p style={{
-        fontSize:"12px",
-        fontWeight:500,
-        color:"var(--color-text-secondary)",
-        textTransform:"uppercase",
-        letterSpacing:"0.05em",
-        marginBottom:"8px",
-        
-      }}>Website Preview 
-      </p>
+      <div className="screenshot-section">
+      <p className="screenshot-label">Website Preview</p>
       <img
       src={`/screenshots/${String((result.metrics as Record<string, unknown>).screenshot_path).split(/[\\/]/).pop()}`}
       alt="Website screenshot"
-      style={{
-        width:"100%",
-        borderRadius:"var(--border-radius-md)",
-        border:"0.5px solid var(--color-border-tertiary)",
-        display:"block",
-      }}
+      className="screenshot-image"
       />
       </div>
     )}

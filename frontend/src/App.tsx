@@ -27,14 +27,15 @@ const App: React.FC = () => {
           <div className="header-inner">
             <div className="logo-icon" aria-hidden="true">WA</div>
             <span className="logo-text">WebAudit Pro</span>
-            <span className="header-badge">Beta</span>
-            <button
-              className="theme-toggle"
-              onClick={toggleTheme}
-              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            >
-              {theme === "dark" ? "☀️" : "🌙"}
-            </button>
+       <button
+  className="theme-toggle"
+  onClick={toggleTheme}
+  aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+  title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+  style={{ marginLeft: "auto" }}
+>
+  {theme === "dark" ? "☀️" : "🌙"}
+</button>
           </div>
         </div>
       </header>
@@ -59,7 +60,7 @@ const App: React.FC = () => {
 
       <footer className="footer">
         <div className="container">
-          WebAudit Pro · Automated website audits · Performance · SEO · Accessibility · Security
+          WebAudit Pro · Automated website audits · Performance · SEO · Accessibility · Security · Functionality
         </div>
       </footer>
     </div>

@@ -23,6 +23,23 @@ const AuditForm: React.FC<Props> = ({
     if (e.key === "Enter" && !loading) onSubmit();
   };
 
+  const getCategoryTitle = (catId: string): string => {
+    switch (catId) {
+      case "performance":
+        return "Analyze page speed, Core Web Vitals, LCP, FCP, CLS";
+      case "seo":
+        return "Check meta tags, headings, canonical URLs, robots.txt, sitemap";
+      case "accessibility":
+        return "Scan for ARIA issues, color contrast, keyboard navigation";
+      case "security":
+        return "Inspect HTTPS, security headers, CSP, HSTS, X-Frame-Options";
+      case "functionality":
+        return "Test navigation links, contact forms, internal link health";
+      default:
+        return "";
+    }
+  };
+
   return (
     <div className="audit-form-card" aria-busy={loading}>
       <section className="audit-primary" aria-labelledby="audit-primary-title">
@@ -64,6 +81,7 @@ const AuditForm: React.FC<Props> = ({
             disabled={loading || !url.trim()}
             aria-disabled={loading || !url.trim()}
             aria-busy={loading}
+            title="Start a full website audit across selected categories"
           >
             {loading ? (
               <>
@@ -95,6 +113,7 @@ const AuditForm: React.FC<Props> = ({
                 key={cat.id}
                 htmlFor={`cat-${cat.id}`}
                 className={`category-chip${isSelected ? " selected" : ""}`}
+                title={getCategoryTitle(cat.id)}
               >
                 <input
                   id={`cat-${cat.id}`}
