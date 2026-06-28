@@ -9,16 +9,18 @@ if sys.platform.startswith("win"):
         asyncio.WindowsProactorEventLoopPolicy()
     )
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.logging_config import setup_logging
+from app.core.limiter import limiter
 from app.routes.health import router as health_router
 from app.routes.audit import router as audit_router
 from app.routes.export import router as export_router
@@ -26,7 +28,7 @@ from app.routes.export import router as export_router
 setup_logging()
 logger = logging.getLogger("audit_tool")
 
-from app.core.limiter import limiter
+_MAX_BODY_SIZE = 10 * 1024  # 10 KB
 
 
 def create_app() -> FastAPI:
@@ -46,6 +48,14 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # ── Body size limit ───────────────────────────────────────────────────────
+    @app.middleware("http")
+    async def limit_body_size(request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > _MAX_BODY_SIZE:
+            return JSONResponse(status_code=413, content={"detail": "Request body too large."})
+        return await call_next(request)
+
     # ── Rate limiting ─────────────────────────────────────────────────────────
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -64,7 +74,6 @@ def create_app() -> FastAPI:
     app.include_router(audit_router)
     app.include_router(export_router)
 
-    import os
     screenshots_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "screenshots")
     os.makedirs(screenshots_dir, exist_ok=True)
     app.mount("/screenshots", StaticFiles(directory=screenshots_dir), name="screenshots")

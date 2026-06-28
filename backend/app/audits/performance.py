@@ -64,7 +64,7 @@ def _run_lighthouse_raw(
         npx_cmd,
         "lighthouse",
         url,
-        "--chrome-flags=--headless",
+        "--chrome-flags=--headless --no-sandbox --disable-dev-shm-usage --disable-gpu",
         "--output=json",
         f"--output-path={temp_path}",
         "--quiet",

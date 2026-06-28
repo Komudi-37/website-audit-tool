@@ -22,6 +22,7 @@ _ALL_CATEGORIES = ["performance", "seo", "accessibility", "security", "functiona
 # ── In-memory cache ────────────────────────────────────────────────────────────
 _cache: dict = {}
 _CACHE_TTL = 600  # 10 minutes
+_CACHE_MAX_SIZE = 100
 
 
 def _get_cache_key(url: str, categories: list[str]) -> str:
@@ -33,11 +34,14 @@ def _get_cached(key: str) -> AuditResponse | None:
     if entry and (time.time() - entry["ts"]) < _CACHE_TTL:
         return entry["data"]
     if entry:
-        del _cache[key]  # expired, remove
+        del _cache[key]
     return None
 
 
 def _set_cache(key: str, data: AuditResponse) -> None:
+    if len(_cache) >= _CACHE_MAX_SIZE:
+        oldest_key = min(_cache, key=lambda k: _cache[k]["ts"])
+        del _cache[oldest_key]
     _cache[key] = {"ts": time.time(), "data": data}
 
 
@@ -107,9 +111,7 @@ async def run_audit(request: Request, body: AuditRequest) -> AuditResponse:
         overall_score=overall_score,
     )
 
-    # ── Store in cache ─────────────────────────────────────────────────────────
     _set_cache(cache_key, response)
-
     return response
 
 
