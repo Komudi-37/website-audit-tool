@@ -50,6 +50,7 @@ const PerformanceCard: React.FC<Props> = ({ result }) => {
                   aria-selected={tab === t}
                   className={`perf-tab${tab === t ? " perf-tab--active" : ""}`}
                   onClick={() => setTab(t)}
+                  title={t === "mobile" ? "View mobile Lighthouse metrics" : "View desktop Lighthouse metrics"}
                 >
                   {t === "mobile" ? "📱 Mobile" : "🖥 Desktop"}
                   {t === "mobile"  && mobileScore  !== null && (

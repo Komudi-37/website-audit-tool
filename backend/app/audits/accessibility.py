@@ -98,7 +98,16 @@ async def run_accessibility_audit(url: str) -> AuditResult:
     try:
         async with async_playwright() as p:
             try:
-                browser = await p.chromium.launch(headless=headless)
+                browser = await p.chromium.launch(
+    headless=headless,
+    args=[
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-setuid-sandbox",
+        "--single-process",
+    ]
+)
             except Exception as exc:
                 detail = f"Failed to launch Chromium browser: {exc}"
                 logger.exception(detail)

@@ -35,4 +35,12 @@ export interface AuditResponse {
   overall_score: number;
 }
 
+export interface AuditHistoryItem {
+  id: number;
+  url: string;
+  timestamp: string;
+  overall_score: number;
+  categories: string;
+}
+
 export type AuditStatus = "idle" | "loading" | "success" | "error";

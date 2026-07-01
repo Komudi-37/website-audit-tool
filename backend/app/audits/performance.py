@@ -59,11 +59,12 @@ def _run_lighthouse_raw(
         temp_path = temp_file.name
 
     started_at = time.perf_counter()
+    npx_cmd = "npx.cmd" if os.name == "nt" else "npx"
     command = [
-        r"C:\Program Files\nodejs\npx.cmd",
+        npx_cmd,
         "lighthouse",
         url,
-        "--chrome-flags=--headless",
+        "--chrome-flags=--headless --no-sandbox --disable-dev-shm-usage --disable-gpu",
         "--output=json",
         f"--output-path={temp_path}",
         "--quiet",

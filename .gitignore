@@ -18,6 +18,9 @@ env/
 node_modules/
 dist/
 .DS_Store
+# ── Environment ───────────────────────────────────────────────────────────────
+.env.local
+.env*.local
 
 # ── Logs & temp ───────────────────────────────────────────────────────────────
 *.log
@@ -26,6 +29,9 @@ dist/
 lighthouse-reports/
 screenshots/
 backend/screenshots/
+
+# ── Database ──
+*.db
 
 # ── IDE ───────────────────────────────────────────────────────────────────────
 .vscode/

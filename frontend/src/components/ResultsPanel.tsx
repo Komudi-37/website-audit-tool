@@ -68,19 +68,27 @@ const ResultsPanel: React.FC<Props> = ({ data, url }) => {
             className="btn-copy"
             onClick={handleCopyUrl}
             aria-label="Copy URL"
-            title="Copy URL"
+            title="Copy audited URL to clipboard"
           >
             {copied ? "Copied!" : "Copy"}
           </button>
         </div>
       </header>
       {hasRenderedCards && (
-        <div style={{ display: "flex", justifyContent: "flex-end", margin: "1rem 0" }}>
+        <div className="action-bar">
           <button
-            className="btn-primary"
+            className="btn-secondary"
+            title="Download full audit report as PDF"
             onClick={async () => {
               try {
-            await downloadPDF({ ...response, url });
+                const deduplicatedResponse = {
+                  ...response,
+                  url,
+                  results: Array.from(
+                    new Map(results.map(r => [r.audit_type, r])).values()
+                  )
+                };
+                await downloadPDF(deduplicatedResponse);
               } catch (err) {
                 alert("PDF generation failed. Please try again.");
               }

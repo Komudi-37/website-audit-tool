@@ -92,6 +92,16 @@ def _build_pdf(data: dict) -> bytes:
     # ── Scores summary ───────────────────────────────────────────────
     story.append(Paragraph("Audit Scores", h1_style))
     results = data.get("results", [])
+    
+    # Deduplicate results by audit_type
+    seen_types = set()
+    unique_results = []
+    for r in results:
+        if r.get("audit_type") not in seen_types:
+            seen_types.add(r.get("audit_type"))
+            unique_results.append(r)
+    results = unique_results
+    
     score_data = [["Audit Type", "Score", "Status"]]
     for r in results:
         score = round(r.get("score", 0), 1)
@@ -158,10 +168,6 @@ def _build_pdf(data: dict) -> bytes:
                 sev = f.get("severity", "info")
                 findings_data.append([
                     sev.capitalize(),
-
-                    f.get("title", ""),
-                  Paragraph(html.escape(f.get("description", "")[:200]), small_style),
-
                     escape(f.get("title", "")),
                     Paragraph(escape(f.get("description", "")[:200]), small_style),
                 ])
@@ -185,9 +191,6 @@ def _build_pdf(data: dict) -> bytes:
         if recommendations:
             story.append(Paragraph("Recommendations", ParagraphStyle("RecHead", parent=styles["Normal"], fontSize=10, fontName="Helvetica-Bold", textColor=colors.HexColor("#2D3748"), spaceBefore=6, spaceAfter=4)))
             for i, rec in enumerate(recommendations, 1):
-
-                story.append(Paragraph(f"{i}. {html.escape(rec)}", body_style))
-
                 story.append(Paragraph(f"{i}. {escape(rec)}", body_style))
 
             story.append(Spacer(1, 0.6*cm))
