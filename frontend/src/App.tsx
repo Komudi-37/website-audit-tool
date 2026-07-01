@@ -60,7 +60,19 @@ const App: React.FC = () => {
 
       <footer className="footer">
         <div className="container">
-          WebAudit Pro · Automated website audits · Performance · SEO · Accessibility · Security · Functionality
+          <div className="footer-links">
+            <span className="footer-link">WebAudit Pro</span>
+            <span className="footer-sep"> · </span>
+            <span className="footer-link">Automated website audits</span>
+            <span className="footer-sep"> · </span>
+            <span className="footer-link">Performance</span>
+            <span className="footer-sep"> · </span>
+            <span className="footer-link">SEO</span>
+            <span className="footer-sep"> · </span>
+            <span className="footer-link">Accessibility</span>
+            <span className="footer-sep"> · </span>
+            <span className="footer-link">Security</span>
+          </div>
         </div>
       </footer>
     </div>

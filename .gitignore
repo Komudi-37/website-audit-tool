@@ -30,6 +30,9 @@ lighthouse-reports/
 screenshots/
 backend/screenshots/
 
+# ── Database ──
+*.db
+
 # ── IDE ───────────────────────────────────────────────────────────────────────
 .vscode/
 .idea/

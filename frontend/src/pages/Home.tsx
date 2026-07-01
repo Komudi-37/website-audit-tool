@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import AuditForm from "../components/AuditForm";
+import AuditHistory from "../components/AuditHistory";
 import StatusBanner from "../components/StatusBanner";
 import ResultsPanel from "../components/ResultsPanel";
 import { runAudit } from "../services/api";
-import type { AuditCategory, AuditStatus } from "../types";
+import type { AuditCategory, AuditStatus, AuditResponse } from "../types";
 import { AUDIT_CATEGORIES } from "../services/constants";
 
 const ResultsLoadingSkeleton: React.FC = () => (
@@ -37,8 +38,9 @@ const Home: React.FC = () => {
     AUDIT_CATEGORIES.map((c) => c.id)
   );
   const [status, setStatus] = useState<AuditStatus>("idle");
-  const [result, setResult] = useState<unknown>(null);
+  const [result, setResult] = useState<AuditResponse | null>(null);
   const [error, setError] = useState<string>("");
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   const isLoading = status === "loading";
 
@@ -68,6 +70,7 @@ const Home: React.FC = () => {
       const data = await runAudit({ url: trimmed, categories: selected });
       setResult(data);
       setStatus("success");
+      setHistoryRefreshKey((prev) => prev + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred");
       setStatus("error");
@@ -93,6 +96,14 @@ const Home: React.FC = () => {
         onToggle={toggleCategory}
         onSubmit={handleSubmit}
         loading={isLoading}
+      />
+
+      <AuditHistory
+        onSelect={(data) => {
+          setResult(data);
+          setStatus("success");
+        }}
+        refreshKey={historyRefreshKey}
       />
 
       {isLoading && (

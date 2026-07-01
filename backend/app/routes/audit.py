@@ -2,11 +2,14 @@
 Audit routes — updated to include the Functionality audit engine.
 """
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from urllib.parse import urlparse
 import ipaddress
 import time
+import logging
+from sqlmodel import Session, select
 from app.core.limiter import limiter
+from app.core.database import get_session, AuditRecord, engine
 from app.schemas.audit import AuditRequest, AuditResponse, AuditResult
 
 from app.audits.performance import run_lighthouse_audit
@@ -16,6 +19,7 @@ from app.audits.security import run_security_audit
 from app.audits.functionality import run_functionality_audit
 
 router = APIRouter()
+logger = logging.getLogger("audit_tool")
 
 _ALL_CATEGORIES = ["performance", "seo", "accessibility", "security", "functionality"]
 
@@ -112,6 +116,22 @@ async def run_audit(request: Request, body: AuditRequest) -> AuditResponse:
     )
 
     _set_cache(cache_key, response)
+
+    # Save to database (non-cached runs only)
+    try:
+        with Session(engine) as db_session:
+            record = AuditRecord(
+                url=str(body.url),
+                timestamp=response.timestamp,
+                overall_score=overall_score,
+                categories=",".join(categories),
+                results_json=response.model_dump_json(),
+            )
+            db_session.add(record)
+            db_session.commit()
+    except Exception as e:
+        logger.warning(f"Failed to save audit to database: {e}")
+
     return response
 
 
@@ -148,3 +168,40 @@ async def run_audit_security(request: Request, body: AuditRequest) -> AuditResul
 async def run_audit_functionality(request: Request, body: AuditRequest) -> AuditResult:
     _validate_url(str(body.url))
     return await run_functionality_audit(str(body.url))
+
+
+@router.get("/audit/history", tags=["Audit"])
+@limiter.limit("30/minute")
+async def get_audit_history(request: Request, limit: int = 20, session: Session = Depends(get_session)):
+    """
+    Returns the most recent audit records (newest first), summary only
+    (no full results_json) — for displaying a history list in the UI.
+    Fields returned per record: id, url, timestamp, overall_score, categories.
+    """
+    capped_limit = min(limit, 50)
+    statement = select(AuditRecord).order_by(AuditRecord.id.desc()).limit(capped_limit)
+    records = session.exec(statement).all()
+    return [
+        {
+            "id": r.id,
+            "url": r.url,
+            "timestamp": r.timestamp,
+            "overall_score": r.overall_score,
+            "categories": r.categories,
+        }
+        for r in records
+    ]
+
+
+@router.get("/audit/history/{record_id}", response_model=AuditResponse, tags=["Audit"])
+@limiter.limit("30/minute")
+async def get_audit_history_detail(request: Request, record_id: int, session: Session = Depends(get_session)):
+    """
+    Returns the full AuditResponse for a specific historical audit record,
+    parsed back from results_json. 404 if not found.
+    """
+    statement = select(AuditRecord).where(AuditRecord.id == record_id)
+    record = session.exec(statement).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Audit record not found")
+    return AuditResponse.model_validate_json(record.results_json)

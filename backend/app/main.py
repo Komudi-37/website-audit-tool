@@ -21,6 +21,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.core.limiter import limiter
+from app.core.database import init_db
 from app.routes.health import router as health_router
 from app.routes.audit import router as audit_router
 from app.routes.export import router as export_router
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     """Application factory."""
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        init_db()
         logger.info("%s v%s started", settings.APP_NAME, settings.APP_VERSION)
         logger.info("Docs available at http://localhost:8000/docs")
         yield
