@@ -1,4 +1,4 @@
-"""Accessibility audit engine using Playwright and axe-core."""
+﻿"""Accessibility audit engine using Playwright and axe-core."""
 import os
 import logging
 import datetime
@@ -20,7 +20,7 @@ def _goto_timeout_ms() -> int:
         return max(5_000, int(raw))
     except ValueError:
         logger.warning(
-            "Invalid PLAYWRIGHT_GOTO_TIMEOUT_MS=%r — using default %s",
+            "Invalid PLAYWRIGHT_GOTO_TIMEOUT_MS=%r â€” using default %s",
             raw,
             DEFAULT_GOTO_TIMEOUT_MS,
         )
@@ -32,7 +32,7 @@ def _goto_wait_until() -> str:
     allowed = {"domcontentloaded", "load", "networkidle", "commit"}
     if value not in allowed:
         logger.warning(
-            "Invalid PLAYWRIGHT_GOTO_WAIT_UNTIL=%r — using %s",
+            "Invalid PLAYWRIGHT_GOTO_WAIT_UNTIL=%r â€” using %s",
             value,
             DEFAULT_GOTO_WAIT_UNTIL,
         )
@@ -98,7 +98,7 @@ async def run_accessibility_audit(url: str) -> AuditResult:
     try:
         async with async_playwright() as p:
             try:
-                browser = await p.chromium.launch(
+                browser = await p.chromium.launch(channel="chromium", 
     headless=headless,
     args=[
         "--no-sandbox",
@@ -136,7 +136,7 @@ async def run_accessibility_audit(url: str) -> AuditResult:
                 status = response.status if response else "unknown"
                 final_url = page.url
                 logger.info(
-                    "Navigation completed in %.2fs — status=%s, final_url=%s",
+                    "Navigation completed in %.2fs â€” status=%s, final_url=%s",
                     nav_duration,
                     status,
                     final_url,
@@ -175,7 +175,7 @@ async def run_accessibility_audit(url: str) -> AuditResult:
                     enriched += f"\nHTTP status: {response.status}"
                 enriched += f"\nFinal URL: {page.url}"
 
-                logger.error("Accessibility audit failed after %.2fs — %s: %s", duration, title, detail)
+                logger.error("Accessibility audit failed after %.2fs â€” %s: %s", duration, title, detail)
                 return _generate_error_result(url, enriched, title=title)
             finally:
                 await browser.close()
@@ -352,3 +352,4 @@ def _generate_error_result(url: str, error_msg: str, *, title: str = "Accessibil
         ],
         recommendations=["Ensure the website is accessible and Playwright is properly configured."],
     )
+

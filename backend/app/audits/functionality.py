@@ -1,5 +1,5 @@
-"""
-Functionality Audit Module — Phase 2
+﻿"""
+Functionality Audit Module â€” Phase 2
 ===================================
 Checks real-world usability of a website by verifying that key interactive
 and structural elements work correctly.
@@ -40,7 +40,7 @@ def _goto_timeout_ms() -> int:
         return max(5_000, int(raw))
     except ValueError:
         logger.warning(
-            "Invalid PLAYWRIGHT_GOTO_TIMEOUT_MS=%r — using default %s",
+            "Invalid PLAYWRIGHT_GOTO_TIMEOUT_MS=%r â€” using default %s",
             raw,
             DEFAULT_GOTO_TIMEOUT_MS,
         )
@@ -52,7 +52,7 @@ def _goto_wait_until() -> str:
     allowed = {"domcontentloaded", "load", "networkidle", "commit"}
     if value not in allowed:
         logger.warning(
-            "Invalid PLAYWRIGHT_GOTO_WAIT_UNTIL=%r — using %s",
+            "Invalid PLAYWRIGHT_GOTO_WAIT_UNTIL=%r â€” using %s",
             value,
             DEFAULT_GOTO_WAIT_UNTIL,
         )
@@ -152,7 +152,7 @@ async def run_functionality_audit(url: str) -> AuditResult:
     try:
         async with async_playwright() as p:
             try:
-                browser = await p.chromium.launch(headless=headless)
+                browser = await p.chromium.launch(headless=headless, channel="chromium")
             except Exception as exc:
                 detail = f"Failed to launch Chromium browser: {exc}"
                 logger.exception(detail)
@@ -180,7 +180,7 @@ async def run_functionality_audit(url: str) -> AuditResult:
                 status = response.status if response else "unknown"
                 final_url = page.url
                 logger.info(
-                    "Navigation completed in %.2fs — status=%s, final_url=%s",
+                    "Navigation completed in %.2fs â€” status=%s, final_url=%s",
                     nav_duration,
                     status,
                     final_url,
@@ -224,7 +224,7 @@ async def run_functionality_audit(url: str) -> AuditResult:
                     enriched += f"\nHTTP status: {response.status}"
                 enriched += f"\nFinal URL: {page.url}"
 
-                logger.error("Functionality audit failed after %.2fs — %s: %s", duration, title, detail)
+                logger.error("Functionality audit failed after %.2fs â€” %s: %s", duration, title, detail)
                 return _generate_error_result(url, enriched, title=title)
             finally:
                 if browser:
@@ -562,7 +562,7 @@ async def _check_internal_links(
             f"{b['url']} ({b['status']})" for b in broken_links[:5]
         )
         if len(broken_links) > 5:
-            broken_summary += f" … and {len(broken_links) - 5} more"
+            broken_summary += f" â€¦ and {len(broken_links) - 5} more"
 
         findings.append(Finding(
             id="func-links-broken",
