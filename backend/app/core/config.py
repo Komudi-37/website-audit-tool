@@ -24,8 +24,8 @@ class Settings(BaseSettings):
         super().__init__(**kwargs)
         # Allow overriding ALLOWED_ORIGINS from environment variable
         env_origins = kwargs.get("ALLOWED_ORIGINS") or os.environ.get("ALLOWED_ORIGINS")
-        if env_origins:
-            self.ALLOWED_ORIGINS = [origin.strip() for origin in env_origins.split(",")]
+if env_origins and not env_origins.strip().startswith("["):
+    self.ALLOWED_ORIGINS = [origin.strip() for origin in env_origins.split(",")]
 
 
 settings = Settings()
