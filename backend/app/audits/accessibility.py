@@ -1,8 +1,12 @@
-﻿"""Accessibility audit engine using Playwright and axe-core."""
+"""Accessibility audit engine using Playwright and axe-core."""
+from anyio.streams import stapled
+from anyio.streams import stapled
+from anyio.streams import stapled
 import os
 import logging
 import datetime
 import time
+import asyncio
 from typing import List, Tuple
 from app.schemas.audit import AuditResult, Finding
 
@@ -70,6 +74,11 @@ def _classify_playwright_error(error_msg: str) -> Tuple[str, str]:
 
 async def run_accessibility_audit(url: str) -> AuditResult:
     """Run Accessibility audit using Playwright and axe-core."""
+    import traceback
+    print("\n========== ACCESSIBILITY AUDIT ENTERED ==========")
+    print(f"URL: {url}")
+    print("==================================================\n")
+
     goto_timeout_ms = _goto_timeout_ms()
     goto_wait_until = _goto_wait_until()
     page_settle_ms = _page_settle_ms()
@@ -82,114 +91,135 @@ async def run_accessibility_audit(url: str) -> AuditResult:
         page_settle_ms,
     )
 
+    print(f"STEP: Timeout config - goto_timeout={goto_timeout_ms}ms, wait_until={goto_wait_until}, settle={page_settle_ms}ms")
+
     headless_env = os.environ.get("PLAYWRIGHT_HEADLESS", "True")
     headless = headless_env.lower() in ("true", "1", "yes")
+
+    print(f"STEP: Headless mode = {headless}")
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     screenshots_dir = os.path.abspath(os.path.join(base_dir, "..", "..", "screenshots"))
     os.makedirs(screenshots_dir, exist_ok=True)
 
-    from playwright.async_api import async_playwright
+    print(f"STEP: Screenshots dir = {screenshots_dir}")
+
+    from app.core.playwright_manager import get_browser
     from axe_playwright_python.async_playwright import Axe
+
+    print("STEP: Imported playwright and axe")
+
+    print("\n========== ACCESSIBILITY EVENT LOOP INFO ==========")
+    print(f"Event loop policy: id={id(asyncio.get_event_loop_policy())}, type={type(asyncio.get_event_loop_policy()).__name__}")
+    try:
+        loop = asyncio.get_running_loop()
+        print(f"Running loop: id={id(loop)}, type={type(loop).__name__}")
+    except RuntimeError:
+        print("No running loop")
+    print("==================================================\n")
 
     started_at = time.perf_counter()
     browser = None
 
     try:
-        async with async_playwright() as p:
-            try:
-                browser = await p.chromium.launch(channel="chromium", 
-    headless=headless,
-    args=[
-        "--no-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-setuid-sandbox",
-        "--single-process",
-    ]
-)
-            except Exception as exc:
-                detail = f"Failed to launch Chromium browser: {exc}"
-                logger.exception(detail)
-                title, _ = _classify_playwright_error(detail)
-                return _generate_error_result(url, detail, title=title)
+        print("STEP: Entering async_playwright context")
+        browser, context, page = await get_browser()
+        response = None
 
-            context = await browser.new_context(
-                viewport={"width": 1280, "height": 800},
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
+        try:
+            print("STEP: About to navigate to URL")
+            nav_started = time.perf_counter()
+            response = await page.goto(
+                url,
+                wait_until=goto_wait_until,
+                timeout=goto_timeout_ms,
             )
-            page = await context.new_page()
-            response = None
+            nav_duration = time.perf_counter() - nav_started
+            status = response.status if response else "unknown"
+            final_url = page.url
+            print(f"STEP: Navigation completed in {nav_duration:.2f}s - status={status}, final_url={final_url}")
+            logger.info(
+                "Navigation completed in %.2fs — status=%s, final_url=%s",
+                nav_duration,
+                status,
+                final_url,
+            )
 
+            if page_settle_ms > 0:
+                print(f"STEP: Waiting {page_settle_ms}ms for page to settle")
+                await page.wait_for_timeout(page_settle_ms)
+
+            print("STEP: Starting axe scan")
+            axe_started = time.perf_counter()
+            axe = Axe()
+            axe_results = await axe.run(page)
+            axe_duration = time.perf_counter() - axe_started
+            print(f"STEP: Axe scan completed in {axe_duration:.2f}s")
+            logger.info("Axe scan completed in %.2fs", axe_duration)
+
+            print("STEP: Parsing axe results")
+            # Parse results before closing browser
+            parsed_result = _parse_axe_report(axe_results.response, url)
+            print(f"STEP: Parsed result - score={parsed_result.score}, findings={len(parsed_result.findings)}")
+
+        except Exception as exc:
+            print("DEBUG: Exception in Navigation/Axe block:")
+            print(traceback.format_exc())
+            print("STEP: Exception during page navigation or axe scan")
+            detail = str(exc).strip() or repr(exc)
+            title, _ = _classify_playwright_error(detail)
+            duration = time.perf_counter() - started_at
+
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            screenshot_filename = f"a11y_error_{timestamp}.png"
+            screenshot_path = os.path.join(screenshots_dir, screenshot_filename)
             try:
-                nav_started = time.perf_counter()
-                response = await page.goto(
-                    url,
-                    wait_until=goto_wait_until,
-                    timeout=goto_timeout_ms,
-                )
-                nav_duration = time.perf_counter() - nav_started
-                status = response.status if response else "unknown"
-                final_url = page.url
-                logger.info(
-                    "Navigation completed in %.2fs â€” status=%s, final_url=%s",
-                    nav_duration,
-                    status,
-                    final_url,
-                )
+                await page.screenshot(path=screenshot_path)
+                logger.error("Saved failure screenshot to %s", screenshot_path)
+            except Exception as screenshot_err:
+                print("DEBUG: Screenshot capture exception:")
+                print(traceback.format_exc())
+                logger.warning("Could not take screenshot on failure: %s", screenshot_err)
 
-                if page_settle_ms > 0:
-                    await page.wait_for_timeout(page_settle_ms)
+            enriched = (
+                f"{detail}\n\n"
+                f"Failure category: {title}\n"
+                f"Navigation settings: wait_until={goto_wait_until}, timeout={goto_timeout_ms}ms\n"
+                f"Elapsed: {duration:.1f}s"
+            )
+            if response is not None:
+                enriched += f"\nHTTP status: {response.status}"
+            enriched += f"\nFinal URL: {page.url}"
 
-                axe_started = time.perf_counter()
-                axe = Axe()
-                axe_results = await axe.run(page)
-                axe_duration = time.perf_counter() - axe_started
-                logger.info("Axe scan completed in %.2fs", axe_duration)
-
-            except Exception as exc:
-                detail = str(exc).strip() or repr(exc)
-                title, _ = _classify_playwright_error(detail)
-                duration = time.perf_counter() - started_at
-
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                screenshot_filename = f"a11y_error_{timestamp}.png"
-                screenshot_path = os.path.join(screenshots_dir, screenshot_filename)
-                try:
-                    await page.screenshot(path=screenshot_path)
-                    logger.error("Saved failure screenshot to %s", screenshot_path)
-                except Exception as screenshot_err:
-                    logger.warning("Could not take screenshot on failure: %s", screenshot_err)
-
-                enriched = (
-                    f"{detail}\n\n"
-                    f"Failure category: {title}\n"
-                    f"Navigation settings: wait_until={goto_wait_until}, timeout={goto_timeout_ms}ms\n"
-                    f"Elapsed: {duration:.1f}s"
-                )
-                if response is not None:
-                    enriched += f"\nHTTP status: {response.status}"
-                enriched += f"\nFinal URL: {page.url}"
-
-                logger.error("Accessibility audit failed after %.2fs â€” %s: %s", duration, title, detail)
-                return _generate_error_result(url, enriched, title=title)
-            finally:
-                await browser.close()
+            logger.error("Accessibility audit failed after %.2fs — %s: %s", duration, title, detail)
+            print(f"STEP: Returning error result - title={title}")
+            print("RETURN PATH:\nbackend/app/audits/accessibility.py\nline 222\nreason: Navigation or Axe scan failed")
+            return _generate_error_result(url, enriched, title=title)
+        finally:
+            print("STEP: Closing browser")
+            await browser.close()
+            print("STEP: Browser closed")
 
         total_duration = time.perf_counter() - started_at
+        print(f"STEP: Total duration {total_duration:.2f}s")
         logger.info("Accessibility audit succeeded for %s in %.2fs", url, total_duration)
-        return _parse_axe_report(axe_results.response, url)
+        print(f"STEP: Returning parsed result - score={parsed_result.score}, findings={len(parsed_result.findings)}")
+        print("========== ACCESSIBILITY AUDIT EXITING ==========\n")
+        print("RETURN PATH:\nbackend/app/audits/accessibility.py\nline 233\nreason: Accessibility audit succeeded")
+        return parsed_result
 
     except Exception as exc:
+        print("DEBUG: Exception in Outer block:")
+        print(traceback.format_exc())
+        print("STEP: Outer exception handler triggered")
         duration = time.perf_counter() - started_at
         detail = str(exc).strip() or repr(exc)
         title, _ = _classify_playwright_error(detail)
         enriched = f"{detail}\n\nElapsed: {duration:.1f}s"
         logger.exception("Error running accessibility audit for %s after %.2fs", url, duration)
+        print(f"STEP: Returning outer error result - title={title}")
+        print("========== ACCESSIBILITY AUDIT EXITING WITH ERROR ==========\n")
+        print("RETURN PATH:\nbackend/app/audits/accessibility.py\nline 245\nreason: Outer exception handler triggered")
         return _generate_error_result(url, enriched, title=title)
 
 

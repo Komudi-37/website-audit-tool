@@ -1,4 +1,4 @@
-﻿"""
+"""
 Functionality Audit Module â€” Phase 2
 ===================================
 Checks real-world usability of a website by verifying that key interactive
@@ -121,16 +121,22 @@ def _generate_error_result(url: str, error_msg: str, *, title: str = "Functional
 
 
 async def run_functionality_audit(url: str) -> AuditResult:
-    
+    import traceback
+    print("\n========== FUNCTIONALITY AUDIT ENTERED ==========")
+    print(f"URL: {url}")
+    print("==================================================\n")
+
     """
     Run the Functionality audit (Phase 2) using Playwright.
-    
+
     Checks that the homepage loads successfully, detects navigation elements
     and links, detects contact forms, and checks internal links for 404s.
     """
     goto_timeout_ms = _goto_timeout_ms()
     goto_wait_until = _goto_wait_until()
     page_settle_ms = _page_settle_ms()
+
+    print(f"STEP: Timeout config - goto_timeout={goto_timeout_ms}ms, wait_until={goto_wait_until}, settle={page_settle_ms}ms")
 
     logger.info(
         "Starting Functionality audit for %s (goto_timeout=%sms, wait_until=%s, settle=%sms)",
@@ -143,108 +149,117 @@ async def run_functionality_audit(url: str) -> AuditResult:
     headless_env = os.environ.get("PLAYWRIGHT_HEADLESS", "True")
     headless = headless_env.lower() in ("true", "1", "yes")
 
-    from playwright.async_api import async_playwright
+    print(f"STEP: Headless mode = {headless}")
+
+    from app.core.playwright_manager import get_browser
+
+    print("STEP: Imported playwright")
 
     started_at = time.perf_counter()
     browser = None
     response = None
 
     try:
-        async with async_playwright() as p:
-            try:
-                browser = await p.chromium.launch(headless=headless, channel="chromium")
-            except Exception as exc:
-                detail = f"Failed to launch Chromium browser: {exc}"
-                logger.exception(detail)
-                title, _ = _classify_playwright_error(detail)
-                return _generate_error_result(url, detail, title=title)
+        print("STEP: Entering async_playwright context")
+        browser, context, page = await get_browser()
 
-            context = await browser.new_context(
-                viewport={"width": 1280, "height": 800},
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
+        try:
+            print("STEP: About to navigate to URL")
+            nav_started = time.perf_counter()
+            response = await page.goto(
+                url,
+                wait_until=goto_wait_until,
+                timeout=goto_timeout_ms,
             )
-            page = await context.new_page()
+            nav_duration = time.perf_counter() - nav_started
+            status = response.status if response else "unknown"
+            final_url = page.url
+            print(f"STEP: Navigation completed in {nav_duration:.2f}s - status={status}, final_url={final_url}")
+            logger.info(
+                "Navigation completed in %.2fs — status=%s, final_url=%s",
+                nav_duration,
+                status,
+                final_url,
+            )
 
+            if page_settle_ms > 0:
+                print(f"STEP: Waiting {page_settle_ms}ms for page to settle")
+                await page.wait_for_timeout(page_settle_ms)
+
+            print("STEP: Capturing screenshot")
+            # Screenshot capture
+            screenshot_path = None
+            screenshot_filename = None
             try:
-                nav_started = time.perf_counter()
-                response = await page.goto(
-                    url,
-                    wait_until=goto_wait_until,
-                    timeout=goto_timeout_ms,
-                )
-                nav_duration = time.perf_counter() - nav_started
-                status = response.status if response else "unknown"
-                final_url = page.url
-                logger.info(
-                    "Navigation completed in %.2fs â€” status=%s, final_url=%s",
-                    nav_duration,
-                    status,
-                    final_url,
-                )
-
-                if page_settle_ms > 0:
-                    await page.wait_for_timeout(page_settle_ms)
-                # Screenshot capture
+                safe_name = re.sub(r"[^a-zA-Z0-9]", "_", urlparse(url).netloc)
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"{safe_name}_{timestamp}.png"
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                screenshots_dir = os.path.abspath(os.path.join(base_dir, "..", "..", "screenshots"))
+                os.makedirs(screenshots_dir, exist_ok=True)
+                screenshot_path = os.path.join(screenshots_dir, filename)
+                screenshot_filename = filename
+                await page.screenshot(path=screenshot_path, full_page=True)
+                print(f"STEP: Screenshot saved to {screenshot_path}")
+                logger.info("Screenshot saved: %s", screenshot_path)
+            except Exception as ss_err:
+                print(f"STEP: Screenshot capture failed: {ss_err}")
+                logger.warning("Screenshot capture failed (non-fatal): %s", ss_err)
                 screenshot_path = None
                 screenshot_filename = None
-                try:
-                    safe_name = re.sub(r"[^a-zA-Z0-9]", "_", urlparse(url).netloc)
-                    from datetime import datetime
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"{safe_name}_{timestamp}.png"
-                    base_dir = os.path.dirname(os.path.abspath(__file__))
-                    screenshots_dir = os.path.abspath(os.path.join(base_dir, "..", "..", "screenshots"))
-                    os.makedirs(screenshots_dir, exist_ok=True)
-                    screenshot_path = os.path.join(screenshots_dir, filename)
-                    screenshot_filename = filename
-                    await page.screenshot(path=screenshot_path, full_page=True)
-                    logger.info("Screenshot saved: %s", screenshot_path)
-                except Exception as ss_err:
-                    logger.warning("Screenshot capture failed (non-fatal): %s", ss_err)
-                    screenshot_path = None
-                    screenshot_filename = None
 
-                html = await page.content()
+            print("STEP: Getting page HTML content")
+            html = await page.content()
+            print(f"STEP: Got HTML content - length={len(html)}")
 
-            except Exception as exc:
-                detail = str(exc).strip() or repr(exc)
-                title, _ = _classify_playwright_error(detail)
-                duration = time.perf_counter() - started_at
-                enriched = (
-                    f"{detail}\n\n"
-                    f"Failure category: {title}\n"
-                    f"Navigation settings: wait_until={goto_wait_until}, timeout={goto_timeout_ms}ms\n"
-                    f"Elapsed: {duration:.1f}s"
-                )
-                if response is not None:
-                    enriched += f"\nHTTP status: {response.status}"
-                enriched += f"\nFinal URL: {page.url}"
+        except Exception as exc:
+            print("DEBUG: Exception in Navigation/Capture block:")
+            print(traceback.format_exc())
+            print("STEP: Exception during page navigation or content capture")
+            detail = str(exc).strip() or repr(exc)
+            title, _ = _classify_playwright_error(detail)
+            duration = time.perf_counter() - started_at
+            enriched = (
+                f"{detail}\n\n"
+                f"Failure category: {title}\n"
+                f"Navigation settings: wait_until={goto_wait_until}, timeout={goto_timeout_ms}ms\n"
+                f"Elapsed: {duration:.1f}s"
+            )
+            if response is not None:
+                enriched += f"\nHTTP status: {response.status}"
+            enriched += f"\nFinal URL: {page.url}"
 
-                logger.error("Functionality audit failed after %.2fs â€” %s: %s", duration, title, detail)
-                return _generate_error_result(url, enriched, title=title)
-            finally:
-                if browser:
-                    await browser.close()
+            logger.error("Functionality audit failed after %.2fs — %s: %s", duration, title, detail)
+            print(f"STEP: Returning error result - title={title}")
+            print("RETURN PATH:\nbackend/app/audits/functionality.py\nline 260\nreason: Navigation or Content capture failed")
+            return _generate_error_result(url, enriched, title=title)
+        finally:
+            print("STEP: Closing browser")
+            if browser:
+                await browser.close()
+            print("STEP: Browser closed")
 
+        print("STEP: About to analyze functionality")
         # Perform the actual logic checks on the retrieved HTML content
-        return await _analyze_functionality(html, status, url, screenshot_filename)
+        result = await _analyze_functionality(html, status, url, screenshot_filename)
+        print(f"STEP: Analysis complete - score={result.score}, findings={len(result.findings)}")
+        print("========== FUNCTIONALITY AUDIT EXITING ==========\n")
+        print("RETURN PATH:\nbackend/app/audits/functionality.py\nline 272\nreason: Functionality audit succeeded")
+        return result
 
     except Exception as exc:
-        import traceback
-        
-        print("\n========== FUNCTIONALITY ERROR ==========")
+        print("DEBUG: Exception in Outer block:")
         print(traceback.format_exc())
-        print("=========================================\n")
-        
+        print("STEP: Outer exception handler triggered")
         duration = time.perf_counter() - started_at
         detail = str(exc).strip() or repr(exc)
         title, _ = _classify_playwright_error(detail)
         enriched = f"{detail}\n\nElapsed: {duration:.1f}s"
         logger.exception("Error running functionality audit for %s after %.2fs", url, duration)
+        print(f"STEP: Returning outer error result - title={title}")
+        print("========== FUNCTIONALITY AUDIT EXITING WITH ERROR ==========\n")
+        print("RETURN PATH:\nbackend/app/audits/functionality.py\nline 284\nreason: Outer exception handler triggered")
         return _generate_error_result(url, enriched, title=title)
 
 

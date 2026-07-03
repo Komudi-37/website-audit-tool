@@ -3,11 +3,28 @@ FastAPI application entry point.
 """
 import sys
 import asyncio
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+print("\n========== BACKEND STARTUP ==========")
+print(f"Python version: {sys.version}")
+print(f"Python executable: {sys.executable}")
+print(f"sys.platform: {sys.platform}")
+print(f"sys.version_info: {sys.version_info}")
+print(f"Event loop policy BEFORE: id={id(asyncio.get_event_loop_policy())}, type={type(asyncio.get_event_loop_policy()).__name__}")
+print("====================================\n")
 
+# Python 3.14+ on Windows has issues with WindowsProactorEventLoopPolicy and subprocess
+# Use SelectorEventLoopPolicy to avoid NotImplementedError in asyncio.create_subprocess_exec
 if sys.platform.startswith("win"):
-    asyncio.set_event_loop_policy(
-        asyncio.WindowsProactorEventLoopPolicy()
-    )
+    if sys.version_info >= (3, 14):
+        # In Python 3.14+, use WindowsSelectorEventLoopPolicy for subprocess support
+        asyncio.set_event_loop_policy(asyncio._WindowsSelectorEventLoopPolicy())
+    else:
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+print(f"Event loop policy AFTER: id={id(asyncio.get_event_loop_policy())}, type={type(asyncio.get_event_loop_policy()).__name__}")
+print("====================================\n")
+
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -36,6 +53,14 @@ def create_app() -> FastAPI:
     """Application factory."""
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        print("\n========== FASTAPI LIFESPAN START ==========")
+        print(f"Event loop policy in lifespan: id={id(asyncio.get_event_loop_policy())}, type={type(asyncio.get_event_loop_policy()).__name__}")
+        try:
+            loop = asyncio.get_running_loop()
+            print(f"Running loop: id={id(loop)}, type={type(loop).__name__}")
+        except RuntimeError:
+            print("No running loop in lifespan")
+        print("============================================\n")
         init_db()
         logger.info("%s v%s started", settings.APP_NAME, settings.APP_VERSION)
         logger.info("Docs available at http://localhost:8000/docs")
