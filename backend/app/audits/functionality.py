@@ -239,10 +239,19 @@ async def run_functionality_audit(url: str) -> AuditResult:
             print("RETURN PATH:\nbackend/app/audits/functionality.py\nline 260\nreason: Navigation or Content capture failed")
             return _generate_error_result(url, enriched, title=title)
         finally:
-            print("STEP: Closing browser")
-            if browser:
-                await browser.close()
-            print("STEP: Browser closed")
+            print("STEP: Closing page and context")
+            try:
+                if not page.is_closed():
+                    await page.close()
+            except Exception:
+                pass
+            try:
+                await context.close()
+            except Exception:
+                pass
+            # Note: browser itself is a shared/reused instance (see playwright_manager.py) —
+            # do NOT close it here, only close_browser() at app shutdown should do that.
+            print("STEP: Page and context closed")
 
         print("STEP: About to analyze functionality")
         # Perform the actual logic checks on the retrieved HTML content
