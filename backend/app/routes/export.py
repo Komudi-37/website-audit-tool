@@ -104,8 +104,12 @@ def _build_pdf(data: dict) -> bytes:
     
     score_data = [["Audit Type", "Score", "Status"]]
     for r in results:
-        score = round(r.get("score", 0), 1)
-        status = "Good" if score >= 80 else "Needs Work" if score >= 50 else "Poor"
+        raw_score = r.get("score")
+        score = round(raw_score, 1) if raw_score is not None else None
+        if score is not None:
+            status = "Good" if score >= 80 else "Needs Work" if score >= 50 else "Poor"
+        else:
+            status = "N/A"
         audit_type = r.get("audit_type", "").capitalize()
         
         # For performance audit, show mobile/desktop scores
@@ -116,9 +120,9 @@ def _build_pdf(data: dict) -> bytes:
             if mobile_score is not None and desktop_score is not None:
                 score_display = f"Mobile: {mobile_score} · Desktop: {desktop_score}"
             else:
-                score_display = f"{score} / 100"
+                score_display = f"{score} / 100" if score is not None else "N/A"
         else:
-            score_display = f"{score} / 100"
+            score_display = f"{score} / 100" if score is not None else "N/A"
         
         score_data.append([audit_type, score_display, status])
 
@@ -138,18 +142,32 @@ def _build_pdf(data: dict) -> bytes:
     story.append(Spacer(1, 0.8*cm))
 
     # ── Screenshot ───────────────────────────────────────────────────
+    print("\n========== SCREENSHOT DEBUG ==========")
     for r in results:
+        print("Audit Type:", r.get("audit_type"))
+        
         screenshot_path = r.get("metrics", {}).get("screenshot_path")
+        print("Screenshot Path:", screenshot_path)
+        
+        if screenshot_path:
+            print("Exists:", os.path.exists(screenshot_path))
         if screenshot_path and os.path.exists(screenshot_path):
             story.append(Paragraph("Website Preview", h1_style))
             try:
-                img = Image(screenshot_path, width=17*cm, height=9*cm)
+                img = Image(screenshot_path)
+                img.drawWidth = 17 * cm
+                img.drawHeight = 9 * cm
                 img.hAlign = "LEFT"
+                
                 story.append(img)
-                story.append(Spacer(1, 0.8*cm))
-            except Exception:
-                pass
+                story.append(Spacer(1, 0.8 * cm))
+                print("✅ Screenshot added to PDF.")
+                
+            except Exception as e:
+                 print("❌ PDF Screenshot Error:", e)
+                 
             break
+
 
     # ── Findings & Recommendations per audit ────────────────────────
     story.append(PageBreak())
@@ -157,8 +175,10 @@ def _build_pdf(data: dict) -> bytes:
 
     for r in results:
         audit_type = r.get("audit_type", "").capitalize()
-        score = round(r.get("score", 0), 1)
-        story.append(Paragraph(f"{escape(audit_type)} — {score}/100", h2_style))
+        raw_score = r.get("score")
+        score = round(raw_score, 1) if raw_score is not None else None
+        score_display = f"{score}/100" if score is not None else "N/A"
+        story.append(Paragraph(f"{escape(audit_type)} — {score_display}", h2_style))
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#E2E8F0")))
 
         findings = r.get("findings", [])

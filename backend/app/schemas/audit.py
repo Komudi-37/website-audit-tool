@@ -9,19 +9,21 @@ from typing import Any, Literal, Optional
 # ---------------------------------------------------------------------------
 
 AuditCategory = Literal[
-    "performance", "seo", "accessibility", "security", "functionality"
+    "performance", "seo", "accessibility", "security", "functionality", "form_validation"
 ]
 
 
 class AuditRequest(BaseModel):
     url: HttpUrl
     categories: Optional[list[AuditCategory]] = None
+    force_refresh: bool = False
 
     model_config = {
         "json_schema_extra": {
             "example": {
                 "url": "https://example.com",
                 "categories": ["performance", "seo"],
+                "force_refresh": False,
             }
         }
     }
@@ -45,7 +47,7 @@ class Finding(BaseModel):
 
 class AuditResult(BaseModel):
     audit_type: AuditCategory
-    score: float                            # 0–100
+    score: Optional[float] = None           # 0–100, or None if not applicable
     metrics: dict[str, Any] = {}
     findings: list[Finding] = []
     recommendations: list[str] = []
@@ -56,3 +58,7 @@ class AuditResponse(BaseModel):
     timestamp: str
     results: list[AuditResult] = []
     overall_score: float                    # 0–100
+    executive_summary: str = ""
+    overall_assessment: str = ""
+    business_impact: str = ""
+    priority_fixes: list[str] = []

@@ -13,7 +13,7 @@ async def run_seo_audit(url: str) -> AuditResult:
     logger.info(f"Starting SEO audit for {url}")
     
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
             response = await client.get(url, timeout=10)
             response.raise_for_status()
             
@@ -148,7 +148,7 @@ async def _analyze_seo(soup: BeautifulSoup, url: str, headers: Dict[str, str] = 
     metrics["images_without_alt"] = len(images_without_alt)
     
     if len(images_without_alt) > 0:
-        penalty = min(20, len(images_without_alt) * 2)
+        penalty = min(10, len(images_without_alt) * 1)
         score -= penalty
         findings.append(Finding(
             id="seo-img-alt-missing",
@@ -218,7 +218,7 @@ async def _analyze_seo(soup: BeautifulSoup, url: str, headers: Dict[str, str] = 
     metrics["robots_txt_url"] = robots_url
     metrics["robots_txt_exists"] = False
     try:
-        r = httpx.get(robots_url, timeout=5)
+        r = httpx.get(robots_url, timeout=5, follow_redirects=True)
         if r.status_code == 200:
             metrics["robots_txt_exists"] = True
             findings.append(Finding(
@@ -364,14 +364,17 @@ async def _analyze_seo(soup: BeautifulSoup, url: str, headers: Dict[str, str] = 
     total_internal_found = len(unique_internal_urls)
     links_to_test = unique_internal_urls[:20]
     broken_links = []
+    results = []
 
     if links_to_test:
         async with httpx.AsyncClient() as client:
-            tasks = [_check_link_url(client, u) for u in links_to_test]
+            semaphore = asyncio.Semaphore(5)
+            tasks = [_check_link_url(client, u, semaphore) for u in links_to_test]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for r in results:
                 if isinstance(r, dict):
-                    broken_links.append(r)
+                    if r.get("confirmed_broken", False):
+                        broken_links.append(r)
                 elif isinstance(r, Exception):
                     logger.warning("Link checking task raised an exception: %s", r)
 
@@ -379,9 +382,10 @@ async def _analyze_seo(soup: BeautifulSoup, url: str, headers: Dict[str, str] = 
     metrics["links_checked"] = len(links_to_test)
     metrics["broken_links"] = broken_links
     metrics["broken_links_count"] = len(broken_links)
+    metrics["inconclusive_links"] = [r for r in results if isinstance(r, dict) and not r.get("confirmed_broken", False)]
 
     if broken_links:
-        penalty = min(25, len(broken_links) * 5)
+        penalty = min(15, len(broken_links) * 3)
         score -= penalty
         broken_desc = "\n".join([f"- {item['url']} (Status: {item['status']})" for item in broken_links])
         findings.append(Finding(
@@ -392,6 +396,18 @@ async def _analyze_seo(soup: BeautifulSoup, url: str, headers: Dict[str, str] = 
             category="seo"
         ))
         recommendations.append("Fix or remove all broken internal links pointing to non-existent pages.")
+    
+    # Report inconclusive links separately (timeouts, connection errors)
+    inconclusive_links = metrics.get("inconclusive_links", [])
+    if inconclusive_links:
+        inconclusive_desc = "\n".join([f"- {item['url']} (Status: {item['status']})" for item in inconclusive_links])
+        findings.append(Finding(
+            id="seo-links-inconclusive",
+            title="Links Could Not Be Verified",
+            description=f"Found {len(inconclusive_links)} links that could not be verified due to timeouts or connection errors. These are not counted as broken but may need manual verification:\n{inconclusive_desc}",
+            severity="info",
+            category="seo"
+        ))
     else:
         findings.append(Finding(
             id="seo-links-ok",
@@ -429,25 +445,36 @@ def _generate_error_result(url: str, error_msg: str) -> AuditResult:
         recommendations=["Ensure the URL is publicly accessible."]
     )
 
-async def _check_link_url(client: httpx.AsyncClient, url: str) -> dict[str, Any] | None:
-    """Check if a URL returns a successful status code."""
-    try:
-        # Use HEAD request as it is faster
-        resp = await client.head(url, timeout=6.0, follow_redirects=True)
-        # Fallback to GET for servers that block/fail on HEAD (returning 400 or 405)
-        if resp.status_code in (400, 405):
-            resp = await client.get(url, timeout=6.0, follow_redirects=True)
+async def _check_link_url(client: httpx.AsyncClient, url: str, semaphore: asyncio.Semaphore) -> dict[str, Any] | None:
+    """Check if a URL returns a successful status code.
+    
+    Returns None if the link is valid, or a dict with details if broken/inconclusive.
+    Only confirmed HTTP 4xx/5xx errors are marked as confirmed_broken=True.
+    Timeouts and connection errors are marked as inconclusive.
+    """
+    async with semaphore:
+        for attempt in range(2):  # Try twice (initial + 1 retry on timeout)
+            try:
+                # Use HEAD request as it is faster
+                resp = await client.head(url, timeout=15.0, follow_redirects=True)
+                # Fallback to GET for servers that block/fail on HEAD (returning 400 or 405)
+                if resp.status_code in (400, 405):
+                    resp = await client.get(url, timeout=15.0, follow_redirects=True)
 
-        if resp.status_code >= 400:
-            return {"url": url, "status": f"HTTP {resp.status_code}"}
-        return None
-    except httpx.TimeoutException:
-        return {"url": url, "status": "timeout"}
-    except httpx.ConnectError:
-        return {"url": url, "status": "connection_error"}
-    except httpx.HTTPStatusError as exc:
-        return {"url": url, "status": f"HTTP {exc.response.status_code}"}
-    except httpx.RequestError as exc:
-        return {"url": url, "status": "request_error", "detail": str(exc)[:80]}
-    except Exception as exc:
-        return {"url": url, "status": "error", "detail": str(exc)[:80]}
+                if resp.status_code >= 400:
+                    # Only 4xx and 5xx are confirmed broken links
+                    return {"url": url, "status": f"HTTP {resp.status_code}", "confirmed_broken": True}
+                return None
+            except httpx.TimeoutException:
+                if attempt == 0:
+                    # Retry once on timeout
+                    continue
+                return {"url": url, "status": "timeout", "confirmed_broken": False}
+            except httpx.ConnectError:
+                return {"url": url, "status": "connection_error", "confirmed_broken": False}
+            except httpx.HTTPStatusError as exc:
+                return {"url": url, "status": f"HTTP {exc.response.status_code}", "confirmed_broken": True}
+            except httpx.RequestError as exc:
+                return {"url": url, "status": "request_error", "confirmed_broken": False, "detail": str(exc)[:80]}
+            except Exception as exc:
+                return {"url": url, "status": "error", "confirmed_broken": False, "detail": str(exc)[:80]}

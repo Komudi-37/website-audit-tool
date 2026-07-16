@@ -6,8 +6,20 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     APP_NAME: str = "AI-Powered Website Audit Tool"
     APP_VERSION: str = "0.1.0"
-    DEBUG: bool = False
+    DEBUG: bool = True
     VERCEL_URL: str = ""
+
+    
+    
+    # -----------------------------
+    # AI Configuration
+    # -----------------------------
+    AI_PROVIDER: str = "openrouter"
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_MODEL: str = "deepseek/deepseek-chat-v3"
+
+
+
     # CORS
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:5173",
