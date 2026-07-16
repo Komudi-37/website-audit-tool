@@ -13,11 +13,15 @@ Checks performed:
 
 from __future__ import annotations
 
+import sys
+import asyncio
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 import os
 import logging
 import re
 import time
-import asyncio
 from typing import Any, Tuple
 from urllib.parse import urljoin, urlparse
 
@@ -231,7 +235,7 @@ async def run_functionality_audit(url: str) -> AuditResult:
                     await browser.close()
 
         # Perform the actual logic checks on the retrieved HTML content
-        return await _analyze_functionality(html, status, url, screenshot_filename)
+        return await _analyze_functionality(html, status, url, screenshot_path)
 
     except Exception as exc:
         import traceback
@@ -248,12 +252,12 @@ async def run_functionality_audit(url: str) -> AuditResult:
         return _generate_error_result(url, enriched, title=title)
 
 
-async def _analyze_functionality(html: str, http_status: int | str, url: str, screenshot_filename: str | None = None) -> AuditResult:
+async def _analyze_functionality(html: str, http_status: int | str, url: str, screenshot_path: str | None = None) -> AuditResult:
     findings: list[Finding] = []
     recommendations: list[str] = []
     metrics: dict[str, Any] = {}
     score = 100.0
-    metrics["screenshot_path"] = screenshot_filename
+    metrics["screenshot_path"] = screenshot_path
     soup = BeautifulSoup(html, "html.parser")
 
     # 1. Homepage loads successfully check

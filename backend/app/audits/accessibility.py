@@ -1,8 +1,14 @@
 """Accessibility audit engine using Playwright and axe-core."""
+import sys
+import asyncio
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 import os
 import logging
 import datetime
 import time
+import math
 from typing import List, Tuple
 from app.schemas.audit import AuditResult, Finding
 
@@ -97,22 +103,25 @@ async def run_accessibility_audit(url: str) -> AuditResult:
 
     try:
         async with async_playwright() as p:
+            logger.info("Launching Chromium browser...")
             try:
                 browser = await p.chromium.launch(
     headless=headless,
     args=[
-        "--no-sandbox",
         "--disable-dev-shm-usage",
         "--disable-gpu",
+        "--no-sandbox",
         "--disable-setuid-sandbox",
-        "--single-process",
-    ]
+    ],
+   
 )
+                logger.info("Browser launched successfully.")
             except Exception as exc:
                 detail = f"Failed to launch Chromium browser: {exc}"
                 logger.exception(detail)
                 title, _ = _classify_playwright_error(detail)
                 return _generate_error_result(url, detail, title=title)
+            logger.info("Creating browser context...")
 
             context = await browser.new_context(
                 viewport={"width": 1280, "height": 800},
@@ -122,11 +131,15 @@ async def run_accessibility_audit(url: str) -> AuditResult:
                     "Chrome/120.0.0.0 Safari/537.36"
                 ),
             )
+            logger.info("Opening new page...")
             page = await context.new_page()
+            page.set_default_navigation_timeout(goto_timeout_ms)
+            page.set_default_timeout(goto_timeout_ms)
             response = None
 
             try:
                 nav_started = time.perf_counter()
+                logger.info("Navigating to %s", url)
                 response = await page.goto(
                     url,
                     wait_until=goto_wait_until,
@@ -146,8 +159,18 @@ async def run_accessibility_audit(url: str) -> AuditResult:
                     await page.wait_for_timeout(page_settle_ms)
 
                 axe_started = time.perf_counter()
+                logger.info("Injecting Axe into page...")
                 axe = Axe()
+                
+                logger.info("Running accessibility scan...")
                 axe_results = await axe.run(page)
+                logger.info("AxeResults type: %s", type(axe_results))
+                logger.info("AxeResults dir: %s", dir(axe_results))
+                try:
+                    logger.info("AxeResults vars: %s", vars(axe_results))
+                except Exception:
+                    logger.info("vars() not available")
+                    logger.info("AxeResults dict: %s", axe_results.__dict__)
                 axe_duration = time.perf_counter() - axe_started
                 logger.info("Axe scan completed in %.2fs", axe_duration)
 
@@ -160,10 +183,15 @@ async def run_accessibility_audit(url: str) -> AuditResult:
                 screenshot_filename = f"a11y_error_{timestamp}.png"
                 screenshot_path = os.path.join(screenshots_dir, screenshot_filename)
                 try:
-                    await page.screenshot(path=screenshot_path)
-                    logger.error("Saved failure screenshot to %s", screenshot_path)
+                    if not page.is_closed():
+                        await page.screenshot(path=screenshot_path)
+                        logger.error("Saved failure screenshot to %s", screenshot_path)
                 except Exception as screenshot_err:
-                    logger.warning("Could not take screenshot on failure: %s", screenshot_err)
+                    logger.warning(
+                            "Could not take screenshot on failure: %s",
+                              screenshot_err,
+    )
+                   
 
                 enriched = (
                     f"{detail}\n\n"
@@ -178,7 +206,21 @@ async def run_accessibility_audit(url: str) -> AuditResult:
                 logger.error("Accessibility audit failed after %.2fs — %s: %s", duration, title, detail)
                 return _generate_error_result(url, enriched, title=title)
             finally:
-                await browser.close()
+                try:
+                     if not page.is_closed():
+                         await page.close()
+                except Exception:
+                    pass
+                try:
+                    await context.close()
+                except Exception:
+                    pass
+                
+                try:
+                    await browser.close()
+                except Exception:
+                    pass
+                
 
         total_duration = time.perf_counter() - started_at
         logger.info("Accessibility audit succeeded for %s in %.2fs", url, total_duration)
@@ -253,14 +295,15 @@ def _parse_axe_report(data: dict, url: str) -> AuditResult:
         nodes = v.get("nodes", [])
         node_count = len(nodes)
 
-        if impact == "critical":
-            score -= 10
-        elif impact == "serious":
-            score -= 5
-        elif impact == "moderate":
-            score -= 3
-        else:
-            score -= 1
+        impact_weights = {"critical": 7, "serious": 4, "moderate": 2, "minor": 1}
+        base_weight = impact_weights.get(impact, 1)
+        
+        # Scale by affected elements using sqrt to avoid linear explosion,
+        # but ensure even single-node violations still count meaningfully
+        node_multiplier = 1 + math.sqrt(max(0, node_count - 1)) * 0.5
+        deduction = min(base_weight * node_multiplier, 12)  # cap per-violation-type deduction at 12
+        
+        score -= deduction
 
         cat = _categorize_violation(rule_id)
         cat_violation_counts[cat] += 1
@@ -299,7 +342,8 @@ def _parse_axe_report(data: dict, url: str) -> AuditResult:
 
         recommendations.append(f"Fix {help_text.lower()} issues: {description}")
 
-    score = max(0, score)
+    # Apply overall safety cap: total deduction capped at 80 (score never below 20)
+    score = max(20, score)
 
     friendly_names = {
         "alt_text": "Image Alt Text",

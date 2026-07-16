@@ -5,7 +5,9 @@ import SEOCard from "./SEOCard";
 import AccessibilityCard from "./AccessibilityCard";
 import SecurityCard from "./SecurityCard";
 import FunctionalityCard from "./FunctionalityCard";
+import FormValidationCard from "./FormValidationCard";
 import ResultsSummary from "./ResultsSummary";
+import AISummaryCard from "./AISummaryCard";
 import { downloadPDF } from "../services/api";
 
 interface Props {
@@ -41,6 +43,9 @@ const ResultsPanel: React.FC<Props> = ({ data, url }) => {
   const functionalityResult = results.find((r) => r.audit_type === "functionality") as
     | AuditResult
     | undefined;
+  const formValidationResult = results.find((r) => r.audit_type === "form_validation") as
+    | AuditResult
+    | undefined;
 
   const renderedResults = [
     perfResult,
@@ -48,6 +53,7 @@ const ResultsPanel: React.FC<Props> = ({ data, url }) => {
     accessibilityResult,
     securityResult,
     functionalityResult,
+    formValidationResult,
   ].filter(Boolean) as AuditResult[];
 
   const hasRenderedCards = renderedResults.length > 0;
@@ -104,12 +110,22 @@ const ResultsPanel: React.FC<Props> = ({ data, url }) => {
       )}
 
       {hasRenderedCards && (
+        <AISummaryCard
+          executiveSummary={response.executive_summary ?? ""}
+          overallAssessment={response.overall_assessment ?? ""}
+          businessImpact={response.business_impact ?? ""}
+          priorityFixes={response.priority_fixes ?? []}
+        />
+      )}
+
+      {hasRenderedCards && (
         <div className="audit-results-list">
           {perfResult && <PerformanceCard result={perfResult} />}
           {seoResult && <SEOCard result={seoResult} />}
           {accessibilityResult && <AccessibilityCard result={accessibilityResult} />}
           {securityResult && <SecurityCard result={securityResult} />}
           {functionalityResult && <FunctionalityCard result={functionalityResult} />}
+          {formValidationResult && <FormValidationCard result={formValidationResult} />}
         </div>
       )}
     </section>

@@ -11,17 +11,19 @@ from sqlmodel import Session, select
 from app.core.limiter import limiter
 from app.core.database import get_session, AuditRecord, engine
 from app.schemas.audit import AuditRequest, AuditResponse, AuditResult
+from app.services.ai_analyzer import analyze_audit
 
 from app.audits.performance import run_lighthouse_audit
 from app.audits.seo import run_seo_audit
 from app.audits.accessibility import run_accessibility_audit
 from app.audits.security import run_security_audit
 from app.audits.functionality import run_functionality_audit
+from app.audits.form_validation import run_form_validation_audit
 
 router = APIRouter()
 logger = logging.getLogger("audit_tool")
 
-_ALL_CATEGORIES = ["performance", "seo", "accessibility", "security", "functionality"]
+_ALL_CATEGORIES = ["performance", "seo", "accessibility", "security", "functionality", "form_validation"]
 
 # ── In-memory cache ────────────────────────────────────────────────────────────
 _cache: dict = {}
@@ -50,9 +52,21 @@ def _set_cache(key: str, data: AuditResponse) -> None:
 
 
 def _validate_url(url: str) -> None:
+    # Length limit: prevent oversized-input abuse
+    if len(url) > 2048:
+        raise HTTPException(status_code=400, detail="Invalid URL: URL exceeds maximum length of 2048 characters.")
+    
     parsed = urlparse(url)
+    
+    # Basic structural validation: must have scheme and netloc
+    if not parsed.scheme or not parsed.netloc:
+        raise HTTPException(status_code=400, detail="Invalid URL: only http/https URLs are supported.")
+    
+    # Scheme allowlist: only http and https are allowed
     if parsed.scheme not in ("http", "https"):
-        raise HTTPException(status_code=400, detail="Auditing private/internal URLs is not allowed.")
+        raise HTTPException(status_code=400, detail="Invalid URL: only http/https URLs are supported.")
+    
+    # Existing SSRF/private-IP checks (unchanged)
     hostname = parsed.hostname or ""
     if hostname.lower() in ("localhost", "127.0.0.1", "0.0.0.0", ""):
         raise HTTPException(status_code=400, detail="Auditing private/internal URLs is not allowed.")
@@ -72,9 +86,10 @@ async def run_audit(request: Request, body: AuditRequest) -> AuditResponse:
 
     # ── Cache check ────────────────────────────────────────────────────────────
     cache_key = _get_cache_key(str(body.url), categories)
-    cached = _get_cached(cache_key)
-    if cached:
-        return cached
+    if not body.force_refresh:
+        cached = _get_cached(cache_key)
+        if cached:
+            return cached
 
     results = []
     for cat in categories:
@@ -88,6 +103,8 @@ async def run_audit(request: Request, body: AuditRequest) -> AuditResponse:
             results.append(run_security_audit(str(body.url)))
         elif cat == "functionality":
             results.append(await run_functionality_audit(str(body.url)))
+        elif cat == "form_validation":
+            results.append(await run_form_validation_audit(str(body.url)))
         else:
             results.append(
                 AuditResult(
@@ -103,16 +120,53 @@ async def run_audit(request: Request, body: AuditRequest) -> AuditResponse:
         res for res in results
         if not (len(res.recommendations) == 1 and "not yet implemented" in res.recommendations[0])
     ]
+    # Filter out results with null scores (e.g., form_validation with no forms)
+    scored_results = [res for res in completed_results if res.score is not None]
     overall_score = (
-        sum(res.score for res in completed_results) / len(completed_results)
-        if completed_results else 0.0
+        sum(res.score for res in scored_results) / len(scored_results)
+        if scored_results else 0.0
     )
+        # ── AI Analysis (best-effort; never blocks the audit response) ─────────
+    # NOTE: findings/recommendations are intentionally NOT modified here.
+    # Only the four top-level narrative fields are populated. Merging AI
+    # findings/recommendations into AuditResult is a separate, later step.
+    executive_summary = ""
+    overall_assessment = ""
+    business_impact = ""
+    priority_fixes: list[str] = []
+
+    try:
+        audit_data = {
+            "url": str(body.url),
+            "overall_score": overall_score,
+            "results": [r.model_dump() for r in results],
+        }
+        ai_analysis = await analyze_audit(audit_data)
+
+        executive_summary = ai_analysis.get("executive_summary", "")
+        overall_assessment = ai_analysis.get("overall_assessment", "")
+        business_impact = ai_analysis.get("business_impact", "")
+        priority_fixes = ai_analysis.get("priority_fixes", [])
+        if not isinstance(priority_fixes, list):
+             priority_fixes = []
+
+    except Exception:
+        logger.exception(
+        "AI analysis failed for url=%s",
+        body.url,
+    )
+
+
 
     response = AuditResponse(
         url=str(body.url),
         timestamp=datetime.now(timezone.utc).isoformat(),
         results=results,
         overall_score=overall_score,
+        executive_summary=executive_summary,
+        overall_assessment=overall_assessment,
+        business_impact=business_impact,
+        priority_fixes=priority_fixes,
     )
 
     _set_cache(cache_key, response)
@@ -168,6 +222,13 @@ async def run_audit_security(request: Request, body: AuditRequest) -> AuditResul
 async def run_audit_functionality(request: Request, body: AuditRequest) -> AuditResult:
     _validate_url(str(body.url))
     return await run_functionality_audit(str(body.url))
+
+
+@router.post("/audit/form_validation", response_model=AuditResult, tags=["Audit"])
+@limiter.limit("10/minute")
+async def run_audit_form_validation(request: Request, body: AuditRequest) -> AuditResult:
+    _validate_url(str(body.url))
+    return await run_form_validation_audit(str(body.url))
 
 
 @router.get("/audit/history", tags=["Audit"])

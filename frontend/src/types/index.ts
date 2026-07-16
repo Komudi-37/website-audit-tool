@@ -5,7 +5,8 @@ export type AuditCategory =
   | "seo"
   | "accessibility"
   | "security"
-  | "functionality";
+  | "functionality"
+  | "form_validation";
 
 export interface AuditRequest {
   url: string;
@@ -22,7 +23,7 @@ export interface Finding {
 
 export interface AuditResult {
   audit_type: AuditCategory;
-  score: number;           // 0–100
+  score: number | null;      // 0–100, or null if not applicable
   metrics: Record<string, unknown>;
   findings: Finding[];
   recommendations: string[];
@@ -33,6 +34,10 @@ export interface AuditResponse {
   timestamp: string;
   results: AuditResult[];
   overall_score: number;
+  executive_summary: string;
+  overall_assessment: string;
+  business_impact: string;
+  priority_fixes: string[];
 }
 
 export interface AuditHistoryItem {

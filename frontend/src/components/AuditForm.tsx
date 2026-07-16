@@ -35,6 +35,8 @@ const AuditForm: React.FC<Props> = ({
         return "Inspect HTTPS, security headers, CSP, HSTS, X-Frame-Options";
       case "functionality":
         return "Test navigation links, contact forms, internal link health";
+      case "form_validation":
+        return "Check password field types, form labels, required inputs";
       default:
         return "";
     }
