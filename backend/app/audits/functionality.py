@@ -13,11 +13,15 @@ Checks performed:
 
 from __future__ import annotations
 
+import sys
+import asyncio
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 import os
 import logging
 import re
 import time
-import asyncio
 from typing import Any, Tuple
 from urllib.parse import urljoin, urlparse
 
@@ -235,18 +239,30 @@ async def run_functionality_audit(url: str) -> AuditResult:
             print("RETURN PATH:\nbackend/app/audits/functionality.py\nline 260\nreason: Navigation or Content capture failed")
             return _generate_error_result(url, enriched, title=title)
         finally:
-            print("STEP: Closing browser")
-            if browser:
-                await browser.close()
-            print("STEP: Browser closed")
+            print("STEP: Closing page and context")
+            try:
+                if not page.is_closed():
+                    await page.close()
+            except Exception:
+                pass
+            try:
+                await context.close()
+            except Exception:
+                pass
+            # Note: browser itself is a shared/reused instance (see playwright_manager.py) —
+            # do NOT close it here, only close_browser() at app shutdown should do that.
+            print("STEP: Page and context closed")
 
         print("STEP: About to analyze functionality")
         # Perform the actual logic checks on the retrieved HTML content
+
         result = await _analyze_functionality(html, status, url, screenshot_filename)
         print(f"STEP: Analysis complete - score={result.score}, findings={len(result.findings)}")
         print("========== FUNCTIONALITY AUDIT EXITING ==========\n")
         print("RETURN PATH:\nbackend/app/audits/functionality.py\nline 272\nreason: Functionality audit succeeded")
         return result
+
+
 
     except Exception as exc:
         print("DEBUG: Exception in Outer block:")
@@ -263,12 +279,12 @@ async def run_functionality_audit(url: str) -> AuditResult:
         return _generate_error_result(url, enriched, title=title)
 
 
-async def _analyze_functionality(html: str, http_status: int | str, url: str, screenshot_filename: str | None = None) -> AuditResult:
+async def _analyze_functionality(html: str, http_status: int | str, url: str, screenshot_path: str | None = None) -> AuditResult:
     findings: list[Finding] = []
     recommendations: list[str] = []
     metrics: dict[str, Any] = {}
     score = 100.0
-    metrics["screenshot_path"] = screenshot_filename
+    metrics["screenshot_path"] = screenshot_path
     soup = BeautifulSoup(html, "html.parser")
 
     # 1. Homepage loads successfully check

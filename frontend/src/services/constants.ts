@@ -38,4 +38,10 @@ export const AUDIT_CATEGORIES: CategoryOption[] = [
     icon: "FUNC",
     description: "Navigation, links, forms",
   },
+  {
+    id: "form_validation",
+    label: "Form Validation",
+    icon: "FORM",
+    description: "Password fields, labels, required inputs",
+  },
 ];

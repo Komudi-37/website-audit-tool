@@ -80,7 +80,7 @@ export function MetricsGrid({ children }: { children: React.ReactNode }) {
 interface AuditCardLayoutProps {
   title: string;
   categoryTag: string;
-  score: number;
+  score: number | null;
   scoreLabel?: string;
   metrics: React.ReactNode;
   findings: Finding[];
@@ -100,8 +100,10 @@ export function AuditCardLayout({
   className = "",
   preserveFindingWhitespace = false,
 }: AuditCardLayoutProps) {
-  const tier = getScoreTier(score);
-  const displayScore = Number.isInteger(score) ? score : Math.round(score * 10) / 10;
+  const tier = score !== null ? getScoreTier(score) : "neutral";
+  const displayScore = score !== null 
+    ? (Number.isInteger(score) ? score : Math.round(score * 10) / 10)
+    : "N/A";
   const errorFinding = findings.find((f) => AUDIT_ERROR_FINDING_IDS.has(f.id));
   const operationalFindings = errorFinding
     ? findings.filter((f) => !AUDIT_ERROR_FINDING_IDS.has(f.id))
@@ -133,12 +135,14 @@ export function AuditCardLayout({
 
       {errorFinding && <AuditErrorBanner finding={errorFinding} />}
 
-      <section className="audit-section" aria-labelledby={`${categoryTag}-metrics`}>
-        <h4 className="audit-section-title" id={`${categoryTag}-metrics`}>
-          Metrics
-        </h4>
-        {metrics}
-      </section>
+      {metrics !== null && (
+        <section className="audit-section" aria-labelledby={`${categoryTag}-metrics`}>
+          <h4 className="audit-section-title" id={`${categoryTag}-metrics`}>
+            Metrics
+          </h4>
+          {metrics}
+        </section>
+      )}
 
       {operationalFindings.length > 0 && (
         <section className="audit-section" aria-labelledby={`${categoryTag}-findings`}>

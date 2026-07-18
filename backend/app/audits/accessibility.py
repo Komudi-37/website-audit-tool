@@ -1,12 +1,10 @@
 """Accessibility audit engine using Playwright and axe-core."""
-from anyio.streams import stapled
-from anyio.streams import stapled
-from anyio.streams import stapled
 import os
 import logging
 import datetime
 import time
 import asyncio
+import math
 from typing import List, Tuple
 from app.schemas.audit import AuditResult, Finding
 
@@ -24,7 +22,7 @@ def _goto_timeout_ms() -> int:
         return max(5_000, int(raw))
     except ValueError:
         logger.warning(
-            "Invalid PLAYWRIGHT_GOTO_TIMEOUT_MS=%r â€” using default %s",
+            "Invalid PLAYWRIGHT_GOTO_TIMEOUT_MS=%r — using default %s",
             raw,
             DEFAULT_GOTO_TIMEOUT_MS,
         )
@@ -36,7 +34,7 @@ def _goto_wait_until() -> str:
     allowed = {"domcontentloaded", "load", "networkidle", "commit"}
     if value not in allowed:
         logger.warning(
-            "Invalid PLAYWRIGHT_GOTO_WAIT_UNTIL=%r â€” using %s",
+            "Invalid PLAYWRIGHT_GOTO_WAIT_UNTIL=%r — using %s",
             value,
             DEFAULT_GOTO_WAIT_UNTIL,
         )
@@ -74,11 +72,6 @@ def _classify_playwright_error(error_msg: str) -> Tuple[str, str]:
 
 async def run_accessibility_audit(url: str) -> AuditResult:
     """Run Accessibility audit using Playwright and axe-core."""
-    import traceback
-    print("\n========== ACCESSIBILITY AUDIT ENTERED ==========")
-    print(f"URL: {url}")
-    print("==================================================\n")
-
     goto_timeout_ms = _goto_timeout_ms()
     goto_wait_until = _goto_wait_until()
     page_settle_ms = _page_settle_ms()
@@ -91,43 +84,22 @@ async def run_accessibility_audit(url: str) -> AuditResult:
         page_settle_ms,
     )
 
-    print(f"STEP: Timeout config - goto_timeout={goto_timeout_ms}ms, wait_until={goto_wait_until}, settle={page_settle_ms}ms")
-
-    headless_env = os.environ.get("PLAYWRIGHT_HEADLESS", "True")
-    headless = headless_env.lower() in ("true", "1", "yes")
-
-    print(f"STEP: Headless mode = {headless}")
-
     base_dir = os.path.dirname(os.path.abspath(__file__))
     screenshots_dir = os.path.abspath(os.path.join(base_dir, "..", "..", "screenshots"))
     os.makedirs(screenshots_dir, exist_ok=True)
 
-    print(f"STEP: Screenshots dir = {screenshots_dir}")
-
     from app.core.playwright_manager import get_browser
     from axe_playwright_python.async_playwright import Axe
 
-    print("STEP: Imported playwright and axe")
-
-    print("\n========== ACCESSIBILITY EVENT LOOP INFO ==========")
-    print(f"Event loop policy: id={id(asyncio.get_event_loop_policy())}, type={type(asyncio.get_event_loop_policy()).__name__}")
-    try:
-        loop = asyncio.get_running_loop()
-        print(f"Running loop: id={id(loop)}, type={type(loop).__name__}")
-    except RuntimeError:
-        print("No running loop")
-    print("==================================================\n")
-
     started_at = time.perf_counter()
-    browser = None
+    response = None
 
     try:
-        print("STEP: Entering async_playwright context")
         browser, context, page = await get_browser()
-        response = None
+        page.set_default_navigation_timeout(goto_timeout_ms)
+        page.set_default_timeout(goto_timeout_ms)
 
         try:
-            print("STEP: About to navigate to URL")
             nav_started = time.perf_counter()
             response = await page.goto(
                 url,
@@ -137,7 +109,6 @@ async def run_accessibility_audit(url: str) -> AuditResult:
             nav_duration = time.perf_counter() - nav_started
             status = response.status if response else "unknown"
             final_url = page.url
-            print(f"STEP: Navigation completed in {nav_duration:.2f}s - status={status}, final_url={final_url}")
             logger.info(
                 "Navigation completed in %.2fs — status=%s, final_url=%s",
                 nav_duration,
@@ -146,26 +117,17 @@ async def run_accessibility_audit(url: str) -> AuditResult:
             )
 
             if page_settle_ms > 0:
-                print(f"STEP: Waiting {page_settle_ms}ms for page to settle")
                 await page.wait_for_timeout(page_settle_ms)
 
-            print("STEP: Starting axe scan")
             axe_started = time.perf_counter()
             axe = Axe()
             axe_results = await axe.run(page)
             axe_duration = time.perf_counter() - axe_started
-            print(f"STEP: Axe scan completed in {axe_duration:.2f}s")
             logger.info("Axe scan completed in %.2fs", axe_duration)
 
-            print("STEP: Parsing axe results")
-            # Parse results before closing browser
             parsed_result = _parse_axe_report(axe_results.response, url)
-            print(f"STEP: Parsed result - score={parsed_result.score}, findings={len(parsed_result.findings)}")
 
         except Exception as exc:
-            print("DEBUG: Exception in Navigation/Axe block:")
-            print(traceback.format_exc())
-            print("STEP: Exception during page navigation or axe scan")
             detail = str(exc).strip() or repr(exc)
             title, _ = _classify_playwright_error(detail)
             duration = time.perf_counter() - started_at
@@ -174,11 +136,10 @@ async def run_accessibility_audit(url: str) -> AuditResult:
             screenshot_filename = f"a11y_error_{timestamp}.png"
             screenshot_path = os.path.join(screenshots_dir, screenshot_filename)
             try:
-                await page.screenshot(path=screenshot_path)
-                logger.error("Saved failure screenshot to %s", screenshot_path)
+                if not page.is_closed():
+                    await page.screenshot(path=screenshot_path)
+                    logger.error("Saved failure screenshot to %s", screenshot_path)
             except Exception as screenshot_err:
-                print("DEBUG: Screenshot capture exception:")
-                print(traceback.format_exc())
                 logger.warning("Could not take screenshot on failure: %s", screenshot_err)
 
             enriched = (
@@ -192,34 +153,30 @@ async def run_accessibility_audit(url: str) -> AuditResult:
             enriched += f"\nFinal URL: {page.url}"
 
             logger.error("Accessibility audit failed after %.2fs — %s: %s", duration, title, detail)
-            print(f"STEP: Returning error result - title={title}")
-            print("RETURN PATH:\nbackend/app/audits/accessibility.py\nline 222\nreason: Navigation or Axe scan failed")
             return _generate_error_result(url, enriched, title=title)
         finally:
-            print("STEP: Closing browser")
-            await browser.close()
-            print("STEP: Browser closed")
+            try:
+                if not page.is_closed():
+                    await page.close()
+            except Exception:
+                pass
+            try:
+                await context.close()
+            except Exception:
+                pass
+            # Note: browser itself is a shared/reused instance (see playwright_manager.py) —
+            # do NOT close it here, only close_browser() at app shutdown should do that.
 
         total_duration = time.perf_counter() - started_at
-        print(f"STEP: Total duration {total_duration:.2f}s")
         logger.info("Accessibility audit succeeded for %s in %.2fs", url, total_duration)
-        print(f"STEP: Returning parsed result - score={parsed_result.score}, findings={len(parsed_result.findings)}")
-        print("========== ACCESSIBILITY AUDIT EXITING ==========\n")
-        print("RETURN PATH:\nbackend/app/audits/accessibility.py\nline 233\nreason: Accessibility audit succeeded")
         return parsed_result
 
     except Exception as exc:
-        print("DEBUG: Exception in Outer block:")
-        print(traceback.format_exc())
-        print("STEP: Outer exception handler triggered")
         duration = time.perf_counter() - started_at
         detail = str(exc).strip() or repr(exc)
         title, _ = _classify_playwright_error(detail)
         enriched = f"{detail}\n\nElapsed: {duration:.1f}s"
         logger.exception("Error running accessibility audit for %s after %.2fs", url, duration)
-        print(f"STEP: Returning outer error result - title={title}")
-        print("========== ACCESSIBILITY AUDIT EXITING WITH ERROR ==========\n")
-        print("RETURN PATH:\nbackend/app/audits/accessibility.py\nline 245\nreason: Outer exception handler triggered")
         return _generate_error_result(url, enriched, title=title)
 
 
@@ -283,14 +240,15 @@ def _parse_axe_report(data: dict, url: str) -> AuditResult:
         nodes = v.get("nodes", [])
         node_count = len(nodes)
 
-        if impact == "critical":
-            score -= 10
-        elif impact == "serious":
-            score -= 5
-        elif impact == "moderate":
-            score -= 3
-        else:
-            score -= 1
+        impact_weights = {"critical": 7, "serious": 4, "moderate": 2, "minor": 1}
+        base_weight = impact_weights.get(impact, 1)
+        
+        # Scale by affected elements using sqrt to avoid linear explosion,
+        # but ensure even single-node violations still count meaningfully
+        node_multiplier = 1 + math.sqrt(max(0, node_count - 1)) * 0.5
+        deduction = min(base_weight * node_multiplier, 12)  # cap per-violation-type deduction at 12
+        
+        score -= deduction
 
         cat = _categorize_violation(rule_id)
         cat_violation_counts[cat] += 1
@@ -329,7 +287,8 @@ def _parse_axe_report(data: dict, url: str) -> AuditResult:
 
         recommendations.append(f"Fix {help_text.lower()} issues: {description}")
 
-    score = max(0, score)
+    # Apply overall safety cap: total deduction capped at 80 (score never below 20)
+    score = max(20, score)
 
     friendly_names = {
         "alt_text": "Image Alt Text",

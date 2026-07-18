@@ -5,13 +5,6 @@ import sys
 import asyncio
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-print("\n========== BACKEND STARTUP ==========")
-print(f"Python version: {sys.version}")
-print(f"Python executable: {sys.executable}")
-print(f"sys.platform: {sys.platform}")
-print(f"sys.version_info: {sys.version_info}")
-print(f"Event loop policy BEFORE: id={id(asyncio.get_event_loop_policy())}, type={type(asyncio.get_event_loop_policy()).__name__}")
-print("====================================\n")
 
 # Python 3.14+ on Windows has issues with WindowsProactorEventLoopPolicy and subprocess
 # Use SelectorEventLoopPolicy to avoid NotImplementedError in asyncio.create_subprocess_exec
@@ -21,9 +14,6 @@ if sys.platform.startswith("win"):
         asyncio.set_event_loop_policy(asyncio._WindowsSelectorEventLoopPolicy())
     else:
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-
-print(f"Event loop policy AFTER: id={id(asyncio.get_event_loop_policy())}, type={type(asyncio.get_event_loop_policy()).__name__}")
-print("====================================\n")
 
 import logging
 import os
@@ -46,7 +36,7 @@ from app.routes.export import router as export_router
 setup_logging()
 logger = logging.getLogger("audit_tool")
 
-_MAX_BODY_SIZE = 10 * 1024  # 10 KB
+_MAX_BODY_SIZE = 2 * 1024 * 1024   # 2 MB
 
 
 def create_app() -> FastAPI:
@@ -82,6 +72,16 @@ def create_app() -> FastAPI:
         if content_length and int(content_length) > _MAX_BODY_SIZE:
             return JSONResponse(status_code=413, content={"detail": "Request body too large."})
         return await call_next(request)
+
+    # ── Security headers ─────────────────────────────────────────────────────
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
 
     # ── Rate limiting ─────────────────────────────────────────────────────────
     app.state.limiter = limiter
