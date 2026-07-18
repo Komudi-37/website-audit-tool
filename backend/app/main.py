@@ -3,17 +3,12 @@ FastAPI application entry point.
 """
 import sys
 import asyncio
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-# Python 3.14+ on Windows has issues with WindowsProactorEventLoopPolicy and subprocess
-# Use SelectorEventLoopPolicy to avoid NotImplementedError in asyncio.create_subprocess_exec
+# Playwright requires the Selector event loop on Windows
 if sys.platform.startswith("win"):
-    if sys.version_info >= (3, 14):
-        # In Python 3.14+, use WindowsSelectorEventLoopPolicy for subprocess support
-        asyncio.set_event_loop_policy(asyncio._WindowsSelectorEventLoopPolicy())
-    else:
-        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    asyncio.set_event_loop_policy(
+        asyncio.WindowsSelectorEventLoopPolicy()
+    )
 
 import logging
 import os
