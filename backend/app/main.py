@@ -4,12 +4,6 @@ FastAPI application entry point.
 import sys
 import asyncio
 
-# Playwright requires the Selector event loop on Windows
-if sys.platform.startswith("win"):
-    asyncio.set_event_loop_policy(
-        asyncio.WindowsSelectorEventLoopPolicy()
-    )
-
 import logging
 import os
 from contextlib import asynccontextmanager

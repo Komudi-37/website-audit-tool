@@ -1,185 +1,74 @@
-"""Performance audit engine using Lighthouse."""
-import subprocess
-import json
-import tempfile
+"""
+Performance audit engine using Google PageSpeed Insights API.
+"""
+
+import requests
 import logging
 import os
-import time
+
+from app.core.config import settings
 from app.schemas.audit import AuditResult, Finding
 
 logger = logging.getLogger("audit_tool.performance")
 
-DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS = 90
+def _call_pagespeed_api(url: str, strategy: str):
+    """
+    Calls the Google PageSpeed Insights API and returns the JSON response.
+    """
+
+    api_key = settings.GOOGLE_PAGESPEED_API_KEY
+
+    if not api_key:
+        raise ValueError(
+            "GOOGLE_PAGESPEED_API_KEY is not configured in the .env file."
+        )
+
+    endpoint = settings.GOOGLE_PAGESPEED_BASE_URL
+
+    endpoint = f"{endpoint}/runPagespeed"
+
+    params = {
+        "url": url,
+        "strategy": strategy,   # "desktop" or "mobile"
+        "key": api_key,
+    }
+    
+    if strategy not in ("desktop", "mobile"):
+        raise ValueError(
+        "strategy must be either 'desktop' or 'mobile'"
+        )
+
+    try:
+        response = requests.get(endpoint, params=params, timeout=120)
+
+        response.raise_for_status()
+
+        data = response.json()
+        if "error" in data:
+            raise RuntimeError(f"Google API returned an error :{data['error']}")
+
+        if "lighthouseResult" not in data:
+            raise RuntimeError(
+                "Invalid response received from Google PageSpeed API."
+            )
+
+        return data
+
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response else "Unknown"
+        body = exc.response.text if exc.response else str(exc)
+        raise RuntimeError(
+            f"Google PageSpeed API Error ({response.status_code}): {response.text}"
+        ) from exc
+
+    except requests.RequestException as exc:
+        raise RuntimeError(
+            f"Failed to connect to Google PageSpeed API: {exc}"
+        ) from exc
+
+
 ERROR_DESCRIPTION_LIMIT = 800
 _PERF_MOBILE_GAP_THRESHOLD = 15   # Points above which a gap finding is raised
-
-
-def _lighthouse_timeout_seconds() -> int:
-    raw = os.environ.get("LIGHTHOUSE_TIMEOUT_SECONDS", str(DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS))
-    try:
-        return max(30, int(raw))
-    except ValueError:
-        logger.warning("Invalid LIGHTHOUSE_TIMEOUT_SECONDS=%r — using default %s", raw, DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS)
-        return DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS
-
-
-def _classify_lighthouse_error(error_msg: str, *, timed_out: bool = False) -> str:
-    if timed_out:
-        return "Lighthouse Execution Timeout"
-    msg_lower = error_msg.lower()
-    if "timed out" in msg_lower or "timeout" in msg_lower:
-        return "Lighthouse Execution Timeout"
-    if "enoent" in msg_lower or "not found" in msg_lower:
-        return "Lighthouse Not Available"
-    if "failed to parse" in msg_lower or "json" in msg_lower:
-        return "Lighthouse Report Parse Error"
-    if "exited with code" in msg_lower:
-        return "Lighthouse Process Error"
-    return "Lighthouse Audit Failed"
-
-
-def _run_lighthouse_raw(
-    url: str, extra_flags: list[str]
-) -> "tuple[dict | None, AuditResult | None]":
-    """
-    Execute one Lighthouse pass and return ``(parsed_json_dict, None)`` on
-    success, or ``(None, error_AuditResult)`` on any failure.
-
-    ``extra_flags`` are appended verbatim to the Lighthouse command, e.g.
-    ``["--preset=desktop"]`` for a desktop run or ``[]`` for the mobile default.
-    """
-    timeout_seconds = _lighthouse_timeout_seconds()
-    preset_label = "desktop" if "--preset=desktop" in extra_flags else "mobile"
-    logger.info(
-        "Starting Lighthouse [%s] audit for %s (timeout=%ss)",
-        preset_label, url, timeout_seconds,
-    )
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_file:
-        temp_path = temp_file.name
-
-    started_at = time.perf_counter()
-    npx_cmd = "npx.cmd" if os.name == "nt" else "npx"
-    command = [
-        npx_cmd,
-        "lighthouse",
-        url,
-        "--chrome-flags=--headless --no-sandbox --disable-dev-shm-usage --disable-gpu",
-        "--output=json",
-        f"--output-path={temp_path}",
-        "--quiet",
-        *extra_flags,
-    ]
-    logger.info("Lighthouse [%s] command: %s", preset_label, " ".join(command))
-    print(f"LIGHTHOUSE COMMAND [{preset_label.upper()}] =", command)
-
-    try:
-        exit_code: int | None = None
-        stderr_text = ""
-
-        try:
-            result = subprocess.run(
-                command,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                timeout=timeout_seconds,
-                stdin=subprocess.DEVNULL,
-            )
-            exit_code = result.returncode
-            stderr_text = (result.stderr or b"").decode("utf-8", errors="replace")
-            duration = time.perf_counter() - started_at
-            json_exists = os.path.exists(temp_path)
-            json_size = os.path.getsize(temp_path) if json_exists else 0
-
-            logger.info(
-                "Lighthouse [%s] finished in %.2fs — exit_code=%s, json_exists=%s, json_size=%s bytes",
-                preset_label, duration, exit_code, json_exists, json_size,
-            )
-            if stderr_text.strip():
-                logger.info(
-                    "Lighthouse [%s] stderr (first 500 chars): %s",
-                    preset_label, stderr_text[:500],
-                )
-
-            if exit_code != 0:
-                if not json_exists:
-                    detail = (
-                        f"Lighthouse [{preset_label}] exited with code {exit_code} and did not "
-                        f"produce a JSON report after {duration:.1f}s."
-                    )
-                    if stderr_text.strip():
-                        detail += f" stderr: {stderr_text.strip()[:400]}"
-                    logger.error(detail)
-                    return None, _generate_error_result(
-                        url, detail, title=_classify_lighthouse_error(detail)
-                    )
-
-                if "EPERM" in stderr_text or "Permission denied" in stderr_text:
-                    logger.warning(
-                        "Lighthouse [%s] exited %s (Windows EPERM temp-cleanup — non-fatal). "
-                        "Proceeding to parse output file.",
-                        preset_label, exit_code,
-                    )
-                else:
-                    logger.warning(
-                        "Lighthouse [%s] exited %s but output file exists — attempting parse.",
-                        preset_label, exit_code,
-                    )
-
-        except subprocess.TimeoutExpired as exc:
-            duration = time.perf_counter() - started_at
-            json_exists = os.path.exists(temp_path)
-            json_size = os.path.getsize(temp_path) if json_exists else 0
-            partial_stderr = ""
-            if exc.stderr:
-                partial_stderr = exc.stderr.decode("utf-8", errors="replace")[:400]
-
-            detail = (
-                f"Lighthouse [{preset_label}] timed out after {timeout_seconds}s "
-                f"(elapsed {duration:.1f}s). JSON output created: {json_exists}"
-            )
-            if json_exists:
-                detail += f" (size: {json_size} bytes — report may be incomplete)."
-            else:
-                detail += ". No JSON report was written."
-            if partial_stderr:
-                detail += f" stderr: {partial_stderr}"
-
-            logger.error(detail)
-            return None, _generate_error_result(
-                url, detail, title=_classify_lighthouse_error(detail, timed_out=True)
-            )
-
-        if not os.path.exists(temp_path):
-            duration = time.perf_counter() - started_at
-            detail = (
-                f"Lighthouse [{preset_label}] completed in {duration:.1f}s "
-                f"but no JSON output file was found at {temp_path}."
-            )
-            logger.error(detail)
-            return None, _generate_error_result(url, detail, title="Lighthouse Output Missing")
-
-        with open(temp_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        return data, None
-
-    except json.JSONDecodeError as exc:
-        duration = time.perf_counter() - started_at
-        detail = f"Failed to parse Lighthouse [{preset_label}] JSON after {duration:.1f}s: {exc}"
-        logger.exception(detail)
-        return None, _generate_error_result(url, detail, title="Lighthouse Report Parse Error")
-    except Exception as exc:
-        duration = time.perf_counter() - started_at
-        detail = f"Unexpected Lighthouse [{preset_label}] error after {duration:.1f}s: {exc}"
-        logger.exception(detail)
-        return None, _generate_error_result(url, detail, title=_classify_lighthouse_error(str(exc)))
-    finally:
-        if os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except Exception as exc:
-                logger.warning("Failed to delete temp file %s: %s", temp_path, exc)
 
 
 def _merge_desktop_mobile(
@@ -279,30 +168,41 @@ def _merge_desktop_mobile(
 
 def run_lighthouse_audit(url: str) -> AuditResult:
     """
-    Run Desktop then Mobile Lighthouse audits sequentially and return a
-    merged ``AuditResult``.
+    Run Google PageSpeed Insights audits for both Desktop and Mobile
+    and merge the results into a single AuditResult.
 
-    The primary ``score`` is the Mobile score. Both score sets plus all Core
-    Web Vitals are available in ``metrics`` under ``desktop_*`` / ``mobile_*``
-    prefixes, with plain (non-prefixed) keys preserved for backward
-    compatibility.
+    The Mobile score is used as the primary performance score.
+     Desktop metrics are preserved for comparison and backward compatibility.
     """
-    logger.info("Starting dual-mode (Desktop + Mobile) Lighthouse audit for %s", url)
+    logger.info(
+    "Starting Google PageSpeed audit (Desktop + Mobile) for %s",
+    url,
+    )
 
     # ── Desktop pass ─────────────────────────────────────────────────────
-    desktop_data, desktop_err = _run_lighthouse_raw(url, ["--preset=desktop"])
-    desktop_result: AuditResult = (
-        _parse_lighthouse_report(desktop_data)
-        if desktop_data is not None
-        else desktop_err  # type: ignore[assignment]
+    try:
+         desktop_json = _call_pagespeed_api(url, "desktop")
+         desktop_result = _parse_lighthouse_report(
+         desktop_json["lighthouseResult"]
+    )
+    except Exception as e:
+        desktop_result = _generate_error_result(
+        url,
+        str(e),
+        title="Google PageSpeed Desktop Error",
     )
 
     # ── Mobile pass (Lighthouse default — no extra flags) ─────────────────
-    mobile_data, mobile_err = _run_lighthouse_raw(url, [])
-    mobile_result: AuditResult = (
-        _parse_lighthouse_report(mobile_data)
-        if mobile_data is not None
-        else mobile_err  # type: ignore[assignment]
+    try:
+         mobile_json = _call_pagespeed_api(url, "mobile")
+         mobile_result = _parse_lighthouse_report(
+         mobile_json["lighthouseResult"]
+    )
+    except Exception as e:
+        mobile_result = _generate_error_result(
+        url,
+        str(e),
+        title="Google PageSpeed Mobile Error",
     )
 
     # ── Merge both results ────────────────────────────────────────────────
@@ -379,11 +279,11 @@ def _parse_lighthouse_report(data: dict) -> AuditResult:
         )
 
     except Exception as exc:
-        logger.exception("Failed to parse Lighthouse JSON report")
-        return _generate_error_result("", f"Failed to parse report: {exc}", title="Lighthouse Report Parse Error")
+        logger.exception("Failed to parse Google PageSpeed response" )
+        return _generate_error_result("", f"Failed to parse report: {exc}", title="Google PageSpeed Parse Error")
 
 
-def _generate_error_result(url: str, error_msg: str, *, title: str = "Lighthouse Audit Failed") -> AuditResult:
+def _generate_error_result(url: str, error_msg: str, *, title: str = "Google PageSpeed Audit Failed") -> AuditResult:
     trimmed = error_msg[:ERROR_DESCRIPTION_LIMIT]
     if url:
         trimmed = f"URL: {url}\n{trimmed}"
@@ -401,5 +301,5 @@ def _generate_error_result(url: str, error_msg: str, *, title: str = "Lighthouse
                 category="performance",
             )
         ],
-        recommendations=["Ensure the URL is publicly accessible and Lighthouse is correctly installed."],
+        recommendations=["Ensure the URL is publicly accessible and the Google PageSpeed API key is valid."],
     )

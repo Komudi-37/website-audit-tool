@@ -14,20 +14,81 @@ Checks:
 """
 
 import logging
-import ssl
-import socket
-import datetime
+import time
 from typing import List, Dict, Any, Tuple
 from urllib.parse import urlparse
 
 import requests
 
 from app.schemas.audit import AuditResult, Finding
+from app.core.config import settings
 
 logger = logging.getLogger("audit_tool.security")
 
-# Type alias for checker return values
-CheckResult = Tuple[List[Finding], int, List[str]]
+def _call_ssl_labs_api(hostname: str) -> Dict[str, Any]:
+    """
+    Query SSL Labs API for SSL/TLS information.
+    """
+
+    url = (
+        f"{settings.SSL_LABS_BASE_URL}/analyze"
+        f"?host={hostname}"
+        f"&publish=off"
+        f"&fromCache=on"
+        f"&all=done"
+    )
+
+    for _ in range(6):
+
+        response = requests.get(url, timeout=120)
+        response.raise_for_status()
+
+        data = response.json()
+
+        status = data.get("status")
+        if status in ("READY", "READY_WITH_WARNINGS"):
+            return data
+        if status =="ERROR":
+            raise RuntimeError("SSL Labs scan failed.")
+        
+        time.sleep(5)
+
+    raise RuntimeError(
+        f"SSL Labs scan did not complete. Status={status}"
+    )
+    
+def _call_mozilla_observatory(url: str) -> Dict[str, Any]:
+    """
+    Query Mozilla Observatory API.
+
+    Returns an empty dict if the API is unavailable so the
+    security audit can continue.
+    """
+
+    endpoint = (
+        f"{settings.MOZILLA_OBSERVATORY_BASE_URL}/analyze"
+    )
+
+    try:
+        response = requests.post(
+            endpoint,
+            json={
+                "host": urlparse(url).hostname,
+                "rescan": False,
+                "hidden": True,
+            },
+            timeout=120,
+        )
+
+        response.raise_for_status()
+
+        return response.json()
+
+    except requests.RequestException as e:
+        logger.warning(
+            f"Mozilla Observatory unavailable: {e}"
+        )
+        return {}
 
 
 # ---------------------------------------------------------------------------
@@ -56,13 +117,35 @@ def run_security_audit(url: str) -> AuditResult:
             },
         )
         headers = {k.lower(): v for k, v in response.headers.items()}
+        observatory = _call_mozilla_observatory(url)
 
         # Run all checks
         score = 100
         all_findings: List[Finding] = []
         all_recommendations: List[str] = []
-        metrics: Dict[str, Any] = {}
-
+        metrics: Dict[str, Any] = {
+             "mozilla_grade": observatory.get("grade"),
+             "mozilla_score": observatory.get("score"),
+        }
+        grade = observatory.get("grade")
+        score_from_api = observatory.get("score")
+        if grade:
+            if grade in("A+" , "A"):
+                severity = "pass"
+            elif grade == "B":
+                severity= "info"
+            else:
+                severity = "warning"
+            all_findings.append(
+                 Finding(
+            id="sec-mozilla-grade",
+            title=f"Mozilla Observatory Grade: {grade}",
+            description=f"Mozilla Observatory assigned this website a security grade of {grade}.",
+            severity=severity,
+            category="security",
+        )
+            )
+                 
         checks = [
             _check_https(url, parsed),
             _check_http_redirect(parsed),
@@ -86,7 +169,9 @@ def run_security_audit(url: str) -> AuditResult:
         all_findings.extend(missing_findings)
         all_recommendations.extend(missing_recs)
         metrics.update(missing_metrics)
-
+        
+        if isinstance(score_from_api, (int, float)):
+            score = round((score + score_from_api) / 2)
         score = max(0, score)
         all_recommendations = list(dict.fromkeys(all_recommendations))
 
@@ -206,110 +291,138 @@ def _check_http_redirect(parsed) -> Tuple[List[Finding], int, List[str], Dict[st
 
     return findings, penalty, recommendations, metrics
 
+def _check_ssl_tls(hostname: str):
 
-# ---------------------------------------------------------------------------
-# Check 3: SSL/TLS certificate
-# ---------------------------------------------------------------------------
-
-def _check_ssl_tls(hostname: str) -> Tuple[List[Finding], int, List[str], Dict[str, Any]]:
-    findings: List[Finding] = []
-    recommendations: List[str] = []
+    findings = []
+    recommendations = []
+    recommendations.append(
+    "Run regular SSL Labs scans to monitor TLS configuration."
+    )
     penalty = 0
-    metrics: Dict[str, Any] = {
+
+    metrics = {
         "ssl_valid": False,
-        "ssl_issuer": None,
+        "ssl_grade": None,
+        "ssl_protocol": None,
         "ssl_expiry": None,
         "ssl_days_remaining": None,
-        "ssl_protocol": None,
     }
 
     if not hostname:
-        findings.append(Finding(
-            id="sec-ssl-skip",
-            title="SSL/TLS Check Skipped",
-            description="Could not determine hostname for SSL/TLS verification.",
-            severity="info",
-            category="security",
-        ))
-        return findings, 0, recommendations, metrics
+        return findings, penalty, recommendations, metrics
 
     try:
-        ctx = ssl.create_default_context()
-        with socket.create_connection((hostname, 443), timeout=5) as sock:
-            with ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
-                cert = ssock.getpeercert()
-                protocol_version = ssock.version()
 
-                # Parse expiry
-                not_after = cert.get("notAfter", "")
-                expiry_dt = datetime.datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
-                days_remaining = (expiry_dt - datetime.datetime.utcnow()).days
+        report = _call_ssl_labs_api(hostname)
 
-                # Parse issuer
-                issuer_parts = []
-                for rdn in cert.get("issuer", ()):
-                    for attr_type, attr_value in rdn:
-                        if attr_type in ("organizationName", "commonName"):
-                            issuer_parts.append(attr_value)
-                issuer_str = ", ".join(issuer_parts) if issuer_parts else "Unknown"
+        endpoint = report["endpoints"][0]
 
-                metrics["ssl_valid"] = True
-                metrics["ssl_issuer"] = issuer_str
-                metrics["ssl_expiry"] = expiry_dt.isoformat()
-                metrics["ssl_days_remaining"] = days_remaining
-                metrics["ssl_protocol"] = protocol_version
+        details = endpoint["details"]
 
-                if days_remaining <= 0:
-                    penalty = 25
-                    findings.append(Finding(
-                        id="sec-ssl-expired",
-                        title="SSL/TLS Certificate Expired",
-                        description=f"The certificate expired on {not_after}.",
-                        severity="critical",
-                        category="security",
-                    ))
-                    recommendations.append("Renew the SSL/TLS certificate immediately.")
-                elif days_remaining <= 30:
-                    penalty = 5
-                    findings.append(Finding(
-                        id="sec-ssl-expiring",
-                        title="SSL/TLS Certificate Expiring Soon",
-                        description=f"The certificate expires in {days_remaining} days (on {not_after}). Issuer: {issuer_str}.",
-                        severity="warning",
-                        category="security",
-                    ))
-                    recommendations.append("Renew the SSL/TLS certificate before it expires.")
-                else:
-                    findings.append(Finding(
-                        id="sec-ssl-ok",
-                        title="SSL/TLS Certificate Valid",
-                        description=f"Certificate is valid for {days_remaining} more days. Issuer: {issuer_str}. Protocol: {protocol_version}.",
-                        severity="pass",
-                        category="security",
-                    ))
+        metrics["ssl_grade"] = endpoint.get("grade")
+        grade = endpoint.get("grade")
+        if grade in ("C", "D", "E", "F", "T", "M"):
+            penalty += 15
+            findings.append( Finding(
+                id="sec-ssl-grade",
+                title=f"Weak SSL Grade ({grade})",
+                description=f"SSL Labs assigned a security grade of {grade}.",
+                severity="warning",
+                category="security",
+            ))
+            recommendations.append( "Improve TLS configuration to achieve at least an A grade.")
+            
+        protocols = details.get("protocols", [])
 
-    except ssl.SSLCertVerificationError as e:
-        penalty = 25
-        metrics["ssl_valid"] = False
-        findings.append(Finding(
-            id="sec-ssl-invalid",
-            title="SSL/TLS Certificate Invalid",
-            description=f"Certificate verification failed: {str(e)[:200]}",
-            severity="critical",
-            category="security",
-        ))
-        recommendations.append("Install a valid SSL/TLS certificate from a trusted certificate authority.")
-    except Exception as e:
-        penalty = 25
-        metrics["ssl_valid"] = False
-        findings.append(Finding(
-            id="sec-ssl-error",
-            title="SSL/TLS Connection Failed",
-            description=f"Could not establish an SSL/TLS connection to {hostname}: {str(e)[:200]}",
-            severity="critical",
-            category="security",
-        ))
-        recommendations.append("Ensure the server supports SSL/TLS connections on port 443.")
+        metrics["ssl_protocol"] = [p.get("name") for p in protocols]
+
+        cert = details.get("cert", {})
+
+        metrics["ssl_expiry"] = cert.get("notAfter")
+
+        metrics["ssl_days_remaining"] = cert.get("daysUntilExpiration")
+
+        metrics["ssl_valid"] = endpoint.get("grade") not in (
+            None,
+            "T",
+            "M",
+        )
+
+        days = cert.get("daysUntilExpiration")
+
+        if days is None:
+
+            findings.append(
+                Finding(
+                    id="sec-ssl-unknown",
+                    title="SSL Information Unavailable",
+                    description="SSL Labs did not return certificate expiry.",
+                    severity="info",
+                    category="security",
+                )
+            )
+
+        elif days <= 0:
+
+            penalty = 25
+
+            findings.append(
+                Finding(
+                    id="sec-ssl-expired",
+                    title="SSL Certificate Expired",
+                    description="The SSL certificate has expired.",
+                    severity="critical",
+                    category="security",
+                )
+            )
+
+            recommendations.append(
+                "Renew the SSL certificate immediately."
+            )
+
+        elif days <= 30:
+
+            penalty = 5
+
+            findings.append(
+                Finding(
+                    id="sec-ssl-expiring",
+                    title="SSL Certificate Expiring Soon",
+                    description=f"Certificate expires in {days} days.",
+                    severity="warning",
+                    category="security",
+                )
+            )
+
+            recommendations.append(
+                "Renew the SSL certificate."
+            )
+
+        else:
+
+            findings.append(
+                Finding(
+                    id="sec-ssl-valid",
+                    title="SSL Certificate Valid",
+                    description=f"Certificate valid for {days} more days.",
+                    severity="pass",
+                    category="security",
+                )
+            )
+
+    except Exception as exc:
+
+        penalty = 20
+
+        findings.append(
+            Finding(
+                id="sec-ssl-error",
+                title="SSL Scan Failed",
+                description=str(exc),
+                severity="warning",
+                category="security",
+            )
+        )
 
     return findings, penalty, recommendations, metrics
 

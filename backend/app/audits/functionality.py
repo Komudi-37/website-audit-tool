@@ -15,8 +15,11 @@ from __future__ import annotations
 
 import sys
 import asyncio
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(
+        asyncio.WindowsSelectorEventLoopPolicy()
+    )
 
 import os
 import logging
